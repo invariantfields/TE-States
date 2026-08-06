@@ -9,9 +9,7 @@ description = "N-Qubit State Optimization & Stabilizer Rényi Entropy (SRE) Traj
 readme = "README.md"
 requires-python = ">=3.12"
 
-# ── CPU-only base dependencies ───────────────────────────────────────────────
-# Sufficient to run Generate_States_cpu.py (JAX on CPU + NumPy SRE).
-# No CUDA drivers or GPU hardware required.
+# ── Base dependencies (CPU mode works out-of-the-box) ────────────────────────
 dependencies = [
     "marimo>=0.10.0",
     "numpy>=2.0.0",
@@ -20,9 +18,11 @@ dependencies = [
     "jaxopt>=0.8.5",
 ]
 
+[tool.setuptools]
+py-modules = ["Generate_States"]
+
 # ── Optional GPU extras ──────────────────────────────────────────────────────
 # Install the block that matches your installed CUDA toolkit.
-# Check your CUDA version with:  nvcc --version
 [project.optional-dependencies]
 
 # CUDA 12 — RTX 30xx / 40xx, A100, H100 with CUDA 12 toolkit
@@ -45,11 +45,3 @@ dev = [
     "nbformat>=5.9.0",        # Required for `marimo export ipynb`
     "ruff>=0.4.0",            # Fast Python linter / formatter
 ]
-
-# ── Quick-reference ──────────────────────────────────────────────────────────
-#
-#   Notebook                    Deps needed        Run command
-#   ─────────────────────────── ────────────────── ─────────────────────────────
-#   Generate_States_cpu.py      (base only)        uv run Generate_States_cpu.py
-#   Generate_States.py          [gpu-cuda12] OR    uv run Generate_States.py
-#                               [gpu-cuda13]

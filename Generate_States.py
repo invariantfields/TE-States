@@ -6,15 +6,9 @@
 #     "jaxopt>=0.8.5",
 #     "scipy>=1.12.0",
 #
-#     # ── GPU dependency: uncomment ONE block below based on your CUDA version ──
-#
-#     # CUDA 13 (RTX 40xx, H100, A100 with CUDA 13 toolkit)
-#     "cupy-cuda13x>=14.0.0",
-#     "jax[cuda13]>=0.4.30",
-#
-#     # CUDA 12 (RTX 30xx/40xx, A100 with CUDA 12 toolkit)
-#     # "cupy-cuda12x>=13.0.0",
-#     # "jax[cuda12]>=0.4.30",
+#     # ── GPU dependency: optional (code automatically falls back to CPU if absent) ──
+#     # CUDA 13: "cupy-cuda13x>=14.0.0", "jax[cuda13]>=0.4.30"
+#     # CUDA 12: "cupy-cuda12x>=13.0.0", "jax[cuda12]>=0.4.30"
 # ]
 # ///
 
@@ -25,84 +19,90 @@ app = marimo.App(width="medium", auto_download=["html"])
 
 
 # ---------------------------------------------------------------------------
-# Cell 1 – Imports & JAX/XLA configuration
+# Cell 1 – Imports, Hardware Detection & JAX/XLA Configuration
 # ---------------------------------------------------------------------------
 @app.cell
 def _():
     """
-    Core imports and GPU/XLA environment setup.
+    Core imports, hardware detection, and JAX/XLA environment setup.
 
-    Key choices:
-    - XLA_PYTHON_CLIENT_PREALLOCATE=false: prevents JAX from reserving the
-      entire GPU VRAM up front, leaving room for CuPy allocations.
-    - JAX_PLATFORMS=cuda,cpu: prefers CUDA, falls back to CPU gracefully.
-    - jax_enable_x64: enables 64-bit floats throughout (required for
-      numerically stable L-BFGS optimisation).
-
-    CUDA version support
-    --------------------
-    Both CUDA 12 and CUDA 13 are supported.  The cell detects the active
-    toolkit version at runtime via `cp.cuda.runtime.runtimeGetVersion()` and
-    prints a confirmation.  No code changes are needed when switching between
-    CUDA versions — just install the matching CuPy wheel:
-
-        CUDA 12:  pip install "cupy-cuda12x>=13.0.0" "jax[cuda12]>=0.4.30"
-        CUDA 13:  pip install "cupy-cuda13x>=14.0.0" "jax[cuda13]>=0.4.30"
+    Automatic GPU → CPU Fallback
+    -----------------------------
+    This cell checks if CuPy is installed and an active CUDA GPU is accessible:
+    - If a GPU is available: sets USE_GPU = True, xp = cp, JAX_PLATFORMS = 'cuda,cpu'.
+    - If no GPU is available or CuPy is missing: falls back seamlessly to CPU
+      (USE_GPU = False, xp = np, JAX_PLATFORMS = 'cpu').
     """
     import os
+    import sys
     import time
     import pickle
+    import argparse
     from itertools import combinations
     from functools import reduce
 
     import numpy as np
-    import cupy as cp
     import jax
     import jax.numpy as jnp
     from jaxopt import LBFGS
     import marimo as mo
 
-    # ---- Detect and report active CUDA version ------------------------------
-    _cuda_ver = cp.cuda.runtime.runtimeGetVersion()
-    _cuda_major = _cuda_ver // 1000
-    _cuda_minor = (_cuda_ver % 1000) // 10
-    print(f"CuPy detected CUDA runtime: {_cuda_major}.{_cuda_minor}")
+    # ---- Hardware Detection & Automatic Fallback ----------------------------
+    USE_GPU = False
+    cp = None
 
-    if _cuda_major not in (12, 13):
-        import warnings
-        warnings.warn(
-            f"Detected CUDA {_cuda_major}.{_cuda_minor}. "
-            "Only CUDA 12 and 13 are tested. Proceeding, but results may vary."
-        )
+    try:
+        import cupy as cp
+        # Test if CUDA runtime is operational and a GPU device is present
+        if cp.cuda.is_available() and cp.cuda.runtime.getDeviceCount() > 0:
+            _cuda_ver = cp.cuda.runtime.runtimeGetVersion()
+            _cuda_major = _cuda_ver // 1000
+            _cuda_minor = (_cuda_ver % 1000) // 10
+            print(f"✅ GPU detected! CUDA runtime: {_cuda_major}.{_cuda_minor}")
+            USE_GPU = True
+        else:
+            print("⚠️ CuPy installed, but no CUDA GPU device available. Falling back to CPU.")
+    except (ImportError, Exception) as exc:
+        print(f"⚠️ GPU acceleration unavailable ({exc}). Automatically falling back to CPU compute (NumPy + JAX CPU).")
+        cp = None
+        USE_GPU = False
 
-    # Allow JAX and CuPy to share GPU memory without one pre-consuming it all.
-    os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
-    os.environ["JAX_PLATFORMS"] = "cuda,cpu"
+    # Set array module alias `xp` for array allocations throughout the notebook
+    xp = cp if USE_GPU else np
 
-    # 64-bit precision is essential for the L-BFGS convergence tolerances used
-    # later (tol=1e-11).
+    # Configure JAX / XLA based on hardware availability
+    if USE_GPU:
+        os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
+        os.environ["JAX_PLATFORMS"] = "cuda,cpu"
+    else:
+        os.environ["JAX_PLATFORMS"] = "cpu"
+
+    # 64-bit precision is essential for the L-BFGS convergence tolerances used later
     jax.config.update("jax_enable_x64", True)
 
-    return LBFGS, combinations, cp, jax, jnp, mo, np, os, pickle, reduce, time
+    return LBFGS, USE_GPU, argparse, combinations, cp, jax, jnp, mo, np, os, pickle, reduce, sys, time, xp
 
 
 # ---------------------------------------------------------------------------
-# Cell 2 – Notebook title and description
+# Cell 2 – Notebook Title and Description
 # ---------------------------------------------------------------------------
 @app.cell
-def _(mo):
-    mo.md(r"""
+def _(USE_GPU, mo):
+    mode_str = "🚀 GPU-accelerated (CuPy + JAX CUDA)" if USE_GPU else "💻 CPU fallback mode (NumPy + JAX CPU)"
+    mo.md(rf"""
     # 🧪 N-Qubit State Optimisation & SRE Trajectory Generator
 
     This notebook generates *stabilizer Rényi entropy* (SRE) trajectories for
     $N$-qubit quantum states.  Starting from random **stabilizer-gap** initial
     states it minimises the total **Hilbert-Schmidt violation** of the
     Hildebrand separability criterion using JAX L-BFGS, while recording the
-    exact SRE at every checkpoint via a native CuPy / FWHT GPU kernel.
+    exact SRE at every checkpoint via a Fast Walsh-Hadamard Transform (FWHT) kernel.
+
+    > **Current Runtime Execution Mode:** {mode_str}
 
     ### Workflow at a glance
     1. **Generate** random almost-stabilizer initial states (symplectic circuit + Haar projection).
-    2. **Optimise** each state batch with vmapped L-BFGS on GPU.
+    2. **Optimise** each state batch with vmapped L-BFGS.
     3. **Measure** SRE at every `chunk_size` optimisation steps.
     4. **Save** full trajectories (purity, violation, SRE, final states) to disk.
     """)
@@ -110,7 +110,7 @@ def _(mo):
 
 
 # ---------------------------------------------------------------------------
-# Cell 3 – Interactive parameter controls
+# Cell 3 – Interactive Parameter Controls
 # ---------------------------------------------------------------------------
 @app.cell
 def _(mo):
@@ -121,8 +121,7 @@ def _(mo):
     - num_seeds_input  : how many independently-initialised trajectories to run.
     - num_steps_input  : total number of L-BFGS micro-iterations per trajectory.
     - chunk_size_input : how many L-BFGS steps to take between metric snapshots
-                         (labelled `step_mes` internally).  Smaller values give
-                         denser trajectories at higher I/O cost.
+                         (labelled `step_mes` internally).
     - run_button       : gate that prevents accidental re-runs on parameter
                          changes in interactive mode.
     """
@@ -158,12 +157,12 @@ def _(mo):
 
 
 # ---------------------------------------------------------------------------
-# Cell 4 – GPU SRE cache and batch SRE computation (CuPy / FWHT)
+# Cell 4 – SRE Cache & Batch SRE Computation (FWHT Kernel - GPU/CPU Unified)
 # ---------------------------------------------------------------------------
 @app.cell
-def _(cp, np):
+def _(USE_GPU, np, xp):
     """
-    Exact second-order stabilizer Rényi entropy (SRE) computed entirely on GPU.
+    Exact second-order stabilizer Rényi entropy (SRE) computed via FWHT.
 
     Background
     ----------
@@ -173,141 +172,94 @@ def _(cp, np):
 
     where Ξ(P) = ⟨ψ|P|ψ⟩ is the *characteristic function* of the state.
 
-    The characteristic function can be computed via a Fast Walsh-Hadamard
-    Transform (FWHT) over the Weyl-Heisenberg phase space, which is what this
-    cell implements.
-
-    Caching strategy
-    ----------------
-    The Hadamard kernel H_n, the XOR index table, and the i^{#Y} phase matrix
-    are all system-size-dependent but **state-independent**.  They are built
-    once and stored in `SRE_GPU_CACHE` keyed by `n_qubits` so repeated calls
-    with the same N pay no construction cost.
+    Hardware Abstraction
+    --------------------
+    Uses `xp` (CuPy when GPU is active, NumPy otherwise) to automatically
+    run calculations on GPU or CPU without code duplication.
     """
 
-    # Module-level cache: avoids re-computing H_n and phase tables each call.
-    SRE_GPU_CACHE = {}
+    SRE_CACHE = {}
 
-    def get_gpu_sre_cache(n_qubits: int):
+    def get_sre_cache(n_qubits: int):
         """
-        Build (or retrieve from cache) the three GPU arrays required by the
-        FWHT-based SRE kernel for a given number of qubits.
-
-        Returns
-        -------
-        H_n              : (dim, dim) Hadamard matrix ⊗^n on GPU.
-        xor_indices      : (dim, dim) int32 array where entry [x,b] = x XOR b.
-        phase_matrix_gpu : (dim, dim) complex128 array encoding i^{popcount(x&z)}
-                           for the Weyl-Heisenberg phase factor, transposed to
-                           (z, b) layout used by the kernel.
+        Build (or retrieve from cache) the Hadamard kernel, XOR index table,
+        and phase matrix for a given system size N.
         """
-        if n_qubits not in SRE_GPU_CACHE:
+        if n_qubits not in SRE_CACHE:
             dim = 2 ** n_qubits
 
-            # Build the n-qubit Hadamard matrix H^{⊗n} on the GPU via
-            # successive Kronecker products.
-            H = cp.array([[1.0, 1.0], [1.0, -1.0]], dtype=cp.complex128)
+            # Build n-qubit Hadamard matrix H^{⊗n} via Kronecker products.
+            H = xp.array([[1.0, 1.0], [1.0, -1.0]], dtype=xp.complex128)
             H_n = H
             for _ in range(n_qubits - 1):
-                H_n = cp.kron(H_n, H)
+                H_n = xp.kron(H_n, H)
 
-            # XOR index table: xor_indices[x, b] = x XOR b.
-            # Used to map psi[b] -> psi[x XOR b] without explicit loop.
-            x_idx = cp.arange(dim, dtype=cp.int32)[:, None]
-            b_idx = cp.arange(dim, dtype=cp.int32)[None, :]
+            # XOR index table
+            x_idx = xp.arange(dim, dtype=xp.int32)[:, None]
+            b_idx = xp.arange(dim, dtype=xp.int32)[None, :]
             xor_indices = x_idx ^ b_idx
 
-            # Phase factor i^{popcount(x & z)} using a vectorised bit-popcount
-            # (SWAR / "parallel bit-counting") algorithm on CPU, then moved to GPU.
+            # Phase factor i^{popcount(x & z)}
             x_u = np.arange(dim, dtype=np.uint32)[:, None]
             z_u = np.arange(dim, dtype=np.uint32)[None, :]
             xz = x_u & z_u
-            # SWAR popcount for 32-bit integers:
             xz -= (xz >> 1) & 0x55555555
             xz = (xz & 0x33333333) + ((xz >> 2) & 0x33333333)
             pop = (((xz + (xz >> 4)) & 0x0F0F0F0F) * 0x01010101) >> 24
 
-            # Map popcount mod 4 to {1, i, -1, -i}.
             phase_table = np.array([1.0 + 0j, 0.0 + 1j, -1.0 + 0j, 0.0 - 1j], dtype=np.complex128)
-            # Transpose to (z, b) layout expected by the batched kernel.
-            phase_matrix_gpu = cp.array(phase_table[pop % 4]).T
+            phase_matrix = xp.array(phase_table[pop % 4]).T
 
-            SRE_GPU_CACHE[n_qubits] = (H_n, xor_indices, phase_matrix_gpu)
+            SRE_CACHE[n_qubits] = (H_n, xor_indices, phase_matrix)
 
-        return SRE_GPU_CACHE[n_qubits]
+        return SRE_CACHE[n_qubits]
 
-    def compute_sre_native_cupy_batch(psi_batch, alpha: int = 2) -> np.ndarray:
+    def compute_sre_batch(psi_batch, alpha: int = 2) -> np.ndarray:
         """
-        Compute the exact α=2 stabilizer Rényi entropy for a batch of states.
+        Compute the exact α=2 SRE for a batch of state vectors.
 
-        Parameters
-        ----------
-        psi_batch : array-like of shape (num_states, 2^n_qubits), complex128
-            Batch of (possibly unnormalised) state vectors.  Accepts JAX,
-            CuPy, or NumPy arrays – converted to CuPy internally.
-        alpha : int
-            SRE order.  Only α=2 is implemented (default).
-
-        Returns
-        -------
-        sre_batch : np.ndarray of shape (num_states,), float64
-            SRE values M_2(|ψ_i⟩) for each state in the batch.
-
-        Algorithm
-        ---------
-        For each state ψ:
-        1. Compute the Gram-like matrix V[x, b] = ψ*[x] · ψ[x XOR b].
-        2. Apply H_n (FWHT) to get the characteristic function Ξ in the Pauli
-           basis: Xi = H_n @ V (in the b-index).
-        3. Multiply by the phase factor i^{popcount(x&z)} to get the real
-           Pauli expectation values Xi_pauli.
-        4. SRE = -log2( Σ Xi_pauli^4 / dim ).
+        Automatically uses GPU (CuPy) or CPU (NumPy) depending on runtime hardware.
         """
         num_states, dim = psi_batch.shape
         n_qubits = int(np.log2(dim))
-        H_n, xor_indices, phase_matrix_gpu = get_gpu_sre_cache(n_qubits)
+        H_n, xor_indices, phase_matrix = get_sre_cache(n_qubits)
 
-        # Move to GPU and normalise each state.
-        psi_gpu = cp.asarray(psi_batch, dtype=cp.complex128)
-        norms = cp.linalg.norm(psi_gpu, axis=1, keepdims=True)
-        norms = cp.where(norms > 1e-12, norms, 1.0)
-        psi_gpu = psi_gpu / norms
+        # Convert to target backend (CuPy or NumPy)
+        psi_xp = xp.asarray(psi_batch, dtype=xp.complex128)
+        norms = xp.linalg.norm(psi_xp, axis=1, keepdims=True)
+        norms = xp.where(norms > 1e-12, norms, 1.0)
+        psi_xp = psi_xp / norms
 
-        # V[i, x, b] = ψ*_i[x] · ψ_i[x XOR b]  (vectorised over the batch).
-        psi_conj = cp.conj(psi_gpu)[:, :, None]       # (batch, dim, 1)
-        psi_xor  = psi_gpu[:, xor_indices]             # (batch, dim, dim)
-        V_batch  = psi_conj * psi_xor                  # (batch, dim, dim)
+        # V[i, x, b] = ψ*_i[x] · ψ_i[x XOR b]
+        psi_conj = xp.conj(psi_xp)[:, :, None]
+        psi_xor  = psi_xp[:, xor_indices]
+        V_batch  = psi_conj * psi_xor
 
-        # FWHT along the b-index: Xi_complex[i] = H_n @ V_batch[i].
-        Xi_complex = cp.matmul(H_n, V_batch)
+        # FWHT along b-index
+        Xi_complex = xp.matmul(H_n, V_batch)
 
-        # Apply i^{popcount} phase to obtain real Pauli expectation values.
-        Xi_pauli = cp.real(Xi_complex * phase_matrix_gpu[None, :, :])
+        # Apply i^{popcount} phase
+        Xi_pauli = xp.real(Xi_complex * phase_matrix[None, :, :])
 
-        # Compute M_2 = -log2( Σ Ξ^4 / dim ).
-        xi_4_sum  = cp.sum(Xi_pauli ** 4, axis=(1, 2))
-        sre_batch = -cp.log2(xi_4_sum / dim)
+        # Compute M_2 = -log2( Σ Ξ^4 / dim )
+        xi_4_sum  = xp.sum(Xi_pauli ** 4, axis=(1, 2))
+        sre_batch = -xp.log2(xi_4_sum / dim)
 
-        return cp.asnumpy(sre_batch)
+        # Return as CPU NumPy array
+        if USE_GPU and hasattr(sre_batch, "get"):
+            return sre_batch.get()
+        return np.asarray(sre_batch)
 
-    return (compute_sre_native_cupy_batch,)
+    return (compute_sre_batch,)
 
 
 # ---------------------------------------------------------------------------
-# Cell 5 – Random stabilizer-state generator (symplectic Clifford circuit)
+# Cell 5 – Random Stabilizer-State Generator (Symplectic Clifford Circuit)
 # ---------------------------------------------------------------------------
 @app.cell
 def _(np):
     """
     Generate a random stabilizer state via a random Clifford circuit.
-
-    The tableau formalism (Aaronson & Gottesman 2004) is used to track the
-    destabilizer-stabilizer tableau.  Only the stabilizer half is needed here
-    so we store:
-
-        x_mat[i, j]  - X-part of the i-th generator on qubit j
-        z_mat[i, j]  - Z-part of the i-th generator on qubit j
-        r[i]         - phase bit (0 = +1, 1 = -1) of the i-th generator
     """
 
     def generate_random_generators_symplectic(
@@ -316,25 +268,12 @@ def _(np):
         """
         Build a random stabilizer group by applying a random sequence of
         Clifford gates (H, S, CNOT) to the computational-basis stabilizer |0…0⟩.
-
-        Parameters
-        ----------
-        n_qubits       : number of qubits.
-        depth_multiplier: total gates ≈ depth_multiplier * n_qubits².
-
-        Returns
-        -------
-        generators : list of Pauli strings, e.g. ["+XIZI", "-ZZXI", …].
         """
-        # Initialise tableau: generators are Z_0, Z_1, …, Z_{n-1}.
         x_mat = np.zeros((n_qubits, n_qubits), dtype=int)
         z_mat = np.eye(n_qubits, dtype=int)
         r     = np.zeros(n_qubits, dtype=int)
 
-        # ---- Clifford gate update rules (in-place on the tableau) ----------
-
         def apply_H(target):
-            """Hadamard: swaps X↔Z and flips phase when both are set."""
             r[:] ^= x_mat[:, target] & z_mat[:, target]
             x_mat[:, target], z_mat[:, target] = (
                 z_mat[:, target].copy(),
@@ -342,19 +281,16 @@ def _(np):
             )
 
         def apply_S(target):
-            """Phase gate S: maps X→Y (Z unchanged), updates phase."""
             r[:] ^= x_mat[:, target] & z_mat[:, target]
             z_mat[:, target] ^= x_mat[:, target]
 
         def apply_CNOT(control, target):
-            """CNOT: propagates X forward and Z backward through the circuit."""
             r[:] ^= (x_mat[:, control] & z_mat[:, target]) & (
                 x_mat[:, target] ^ z_mat[:, control] ^ 1
             )
             x_mat[:, target]  ^= x_mat[:, control]
             z_mat[:, control] ^= z_mat[:, target]
 
-        # ---- Random circuit -------------------------------------------------
         num_gates = depth_multiplier * n_qubits ** 2
         for _ in range(num_gates):
             gate = np.random.choice(["H", "S", "CNOT"])
@@ -366,7 +302,6 @@ def _(np):
                 c, t = np.random.choice(n_qubits, 2, replace=False)
                 apply_CNOT(c, t)
 
-        # ---- Convert tableau rows to Pauli strings -------------------------
         generators = []
         for i in range(n_qubits):
             sign      = "-" if r[i] else "+"
@@ -385,116 +320,73 @@ def _(np):
 
 
 # ---------------------------------------------------------------------------
-# Cell 6 – Stabilizer projector & almost-stabilizer initial states
+# Cell 6 – Stabilizer Projector & Almost-Stabilizer Initial States
 # ---------------------------------------------------------------------------
 @app.cell
-def _(cp, generate_random_generators_symplectic, reduce):
+def _(generate_random_generators_symplectic, reduce, xp):
     """
     Build Pauli matrices, projectors onto stabilizer subspaces, and random
-    *almost-stabilizer* (stabilizer-gap) initial states.
-
-    An almost-stabilizer state with gap g is prepared by:
-    1. Drawing a Haar-random unitary on the full 2^n space.
-    2. Applying the state to |0⟩ to get a Haar-random state ψ.
-    3. Projecting ψ onto the tensor product of a random (n-g)-qubit stabilizer
-       subspace and a free g-qubit space, then re-normalising.
-
-    This biases the initial state toward having low but non-zero SRE, providing
-    a warm start for the violation-minimisation optimiser.
+    almost-stabilizer initial states using `xp` (GPU/CPU unified).
     """
 
-    # Single-qubit Pauli matrices (on GPU).
     PAULI_MAP = {
-        "I": cp.array([[1, 0], [0, 1]],   dtype=complex),
-        "X": cp.array([[0, 1], [1, 0]],   dtype=complex),
-        "Y": cp.array([[0, -1j], [1j, 0]], dtype=complex),
-        "Z": cp.array([[1, 0], [0, -1]],  dtype=complex),
+        "I": xp.array([[1, 0], [0, 1]],   dtype=complex),
+        "X": xp.array([[0, 1], [1, 0]],   dtype=complex),
+        "Y": xp.array([[0, -1j], [1j, 0]], dtype=complex),
+        "Z": xp.array([[1, 0], [0, -1]],  dtype=complex),
     }
 
-    def pauli_string_to_matrix(pauli_str: str) -> cp.ndarray:
-        """
-        Convert a Pauli string (e.g. '+XZY') to its 2^n × 2^n matrix via
-        successive Kronecker products.
-        """
+    def pauli_string_to_matrix(pauli_str: str):
         sign      = -1 if pauli_str[0] == "-" else 1
         clean_str = pauli_str.lstrip("+-")
         matrices  = [PAULI_MAP[char] for char in clean_str]
-        return sign * reduce(cp.kron, matrices)
+        return sign * reduce(xp.kron, matrices)
 
-    def build_projector_from_generators(generators: list[str]) -> cp.ndarray:
-        """
-        Build the stabilizer projector Π = ∏_g (I + g) / 2 for a list of
-        commuting Pauli generators g.
-
-        The result is the rank-1 projector onto the unique +1 eigenstate of all
-        generators (assuming they form a maximal Abelian subgroup).
-        """
+    def build_projector_from_generators(generators: list[str]):
         n_qubits = len(generators[0].lstrip("+-"))
         dim      = 2 ** n_qubits
-        projector = cp.eye(dim, dtype=complex)
-        identity  = cp.eye(dim, dtype=complex)
+        projector = xp.eye(dim, dtype=complex)
+        identity  = xp.eye(dim, dtype=complex)
         for gen in generators:
             g_matrix  = pauli_string_to_matrix(gen)
             projector = projector @ ((identity + g_matrix) / 2.0)
         return projector
 
-    def haar_random_unitary_gpu(dim: int) -> cp.ndarray:
-        """
-        Sample a Haar-random unitary matrix via QR decomposition of a
-        Ginibre ensemble (complex Gaussian random matrix).
-        """
-        z    = cp.random.randn(dim, dim) + 1j * cp.random.randn(dim, dim)
-        q, r = cp.linalg.qr(z)
-        # Correct the QR phase ambiguity to ensure uniform Haar measure.
-        d    = cp.diagonal(r)
-        ph   = d / cp.abs(d)
+    def haar_random_unitary(dim: int):
+        z    = xp.random.randn(dim, dim) + 1j * xp.random.randn(dim, dim)
+        q, r = xp.linalg.qr(z)
+        d    = xp.diagonal(r)
+        ph   = d / xp.abs(d)
         return q * ph
 
-    def rand_Almost_Stab_state(n_qubits: int, almost_gap: int = 1) -> cp.ndarray:
-        """
-        Generate a random almost-stabilizer state with stabilizer gap `almost_gap`.
-
-        Parameters
-        ----------
-        n_qubits   : total number of qubits N.
-        almost_gap : number of 'free' (non-stabilized) qubits g ∈ {0, …, N}.
-                     gap=0 → pure stabilizer state; gap=N → pure Haar-random.
-
-        Returns
-        -------
-        Normalised state vector of length 2^N on the GPU.
-        """
-        # Start from a Haar-random state on the full space.
-        psi = cp.zeros(2 ** n_qubits, dtype=complex)
+    def rand_Almost_Stab_state(n_qubits: int, almost_gap: int = 1):
+        psi = xp.zeros(2 ** n_qubits, dtype=complex)
         psi[0] = 1.0
-        psi = haar_random_unitary_gpu(2 ** n_qubits) @ psi
+        psi = haar_random_unitary(2 ** n_qubits) @ psi
 
-        # If no stabilizer part is requested, return the Haar-random state as-is.
         if n_qubits - almost_gap == 0:
             return psi
 
-        # Project onto the tensor product of a random (N-g)-qubit stabilizer
-        # subspace and the free g-qubit space.
-        proj = cp.kron(
+        proj = xp.kron(
             build_projector_from_generators(
                 generate_random_generators_symplectic(n_qubits - almost_gap)
             ),
-            cp.eye(2 ** almost_gap, dtype=complex),
+            xp.eye(2 ** almost_gap, dtype=complex),
         )
         projected_psi = proj @ psi
-        return projected_psi / cp.linalg.norm(projected_psi)
+        return projected_psi / xp.linalg.norm(projected_psi)
 
     return (rand_Almost_Stab_state,)
 
 
 # ---------------------------------------------------------------------------
-# Cell 7 – JAX/L-BFGS batch optimiser with SRE trajectory logging
+# Cell 7 – JAX/L-BFGS Batch Optimiser with SRE Trajectory Logging
 # ---------------------------------------------------------------------------
 @app.cell
 def _(
     LBFGS,
     combinations,
-    compute_sre_native_cupy_batch,
+    compute_sre_batch,
     jax,
     jnp,
     np,
@@ -504,31 +396,10 @@ def _(
 ):
     """
     Core optimisation routine: vmapped L-BFGS over a batch of states.
-
-    Objective
-    ---------
-    Minimise the total squared Hildebrand violation across all bipartitions of
-    equal size ⌊N/2⌋.  For a bipartition ρ_AB the violation is
-
-        viol(ρ_AB) = max(0,  λ_max(ρ_AB) - λ_2(ρ_AB) - 2√(λ_1 λ_3))
-
-    where λ_1 ≤ λ_2 ≤ λ_3 ≤ λ_max are the ordered eigenvalues of ρ_AB.
-    A state with zero total violation across all bipartitions is entanglement-
-    separable and necessarily a stabilizer state (SRE = 0).
-
-    Parametrisation
-    ---------------
-    JAX operates on real parameter vectors of length 2·2^N, obtained by
-    stacking the real and imaginary parts of the complex state vector.
-
-    vmapping
-    --------
-    Both the metric computation and the solver step are vmapped over the
-    batch dimension so all `num_starts` trajectories are optimised in parallel
-    on the GPU.
+    Fully compatible with both GPU and CPU execution.
     """
 
-    def run_jax_gpu_optimization(
+    def run_jax_optimization(
         n_qubits: int,
         num_starts: int,
         num_loops: int,
@@ -536,75 +407,35 @@ def _(
         step_mes: int = 1,
         filename: str = "jax_trajectory_data.pkl",
     ) -> dict:
-        """
-        Run batched L-BFGS optimisation and record SRE trajectories.
-
-        Parameters
-        ----------
-        n_qubits   : system size N.
-        num_starts : number of parallel trajectories (batch size).
-        num_loops  : total number of L-BFGS micro-iterations.
-        gap        : stabilizer gap of the initial states.
-        step_mes   : number of L-BFGS steps between metric snapshots.
-        filename   : path to save the resulting trajectory dictionary.
-
-        Returns
-        -------
-        trajectories : dict with keys
-            'average_purity'  – list[list[float]]  mean purity over bipartitions
-            'max_purity'      – list[list[float]]  max purity over bipartitions
-            'sre'             – list[list[float]]  M_2 SRE per state
-            'total_violation' – list[list[float]]  total squared violation
-            'final_states'    – list[np.ndarray]   complex state vectors
-        """
         n     = n_qubits
-        k     = n // 2          # bipartition size
+        k     = n // 2
         n_dim = 2 ** n
 
-        # Enumerate all equal bipartitions of size k.
         combos = list(combinations(range(n), k))
-
-        # For each bipartition, build a permutation that moves the traced-out
-        # indices to the front so reshape(-1, 2^k) gives the correct reduced
-        # density matrix.
         perms_list = []
         for combo in combos:
             keep  = list(combo)
             trace = [i for i in range(n) if i not in keep]
             perms_list.append(tuple(trace + keep))
 
-        # ---- JAX-jitted metric computation ----------------------------------
-
         @jax.jit
         def get_purity_and_violation(psi_vec):
-            """
-            From a real parameter vector (real | imag) compute:
-            - average purity across bipartitions
-            - maximum purity across bipartitions
-            - total squared Hildebrand violation
-            """
-            # Reconstruct and normalise the complex state vector.
             psi        = psi_vec[:n_dim] + 1j * psi_vec[n_dim:]
             psi        = psi / jnp.linalg.norm(psi)
             psi_tensor = psi.reshape((2,) * n)
 
-            # Compute all reduced density matrices ρ_AB = Tr_A |ψ⟩⟨ψ| for each bipartition.
             rhos = [
                 psi_tensor.transpose(perm).reshape(-1, 2 ** k).conj().T
                 @ psi_tensor.transpose(perm).reshape(-1, 2 ** k)
                 for perm in perms_list
             ]
-            batch_rho = jnp.stack(rhos, axis=0)           # (n_bipartitions, 2^k, 2^k)
-            eigenvalues = jnp.linalg.eigvalsh(batch_rho)  # (n_bipartitions, 2^k)
+            batch_rho = jnp.stack(rhos, axis=0)
+            eigenvalues = jnp.linalg.eigvalsh(batch_rho)
 
             purities    = jnp.sum(eigenvalues ** 2, axis=-1)
             avg_purity  = jnp.mean(purities)
             max_purity  = jnp.max(purities)
 
-            # Hildebrand violation per bipartition:
-            #   max(0,  λ_max - λ_{max-1} - 2√(λ_min · λ_{max-2}))
-            # (only defined for 2×2 blocks, i.e. k=1, but generalised here to
-            # the three smallest eigenvalues of the reduced density matrix.)
             rhs  = eigenvalues[:, 1] + 2 * jnp.sqrt(
                 jnp.maximum(eigenvalues[:, 0] * eigenvalues[:, 2], 1e-15)
             )
@@ -615,42 +446,35 @@ def _(
 
         @jax.jit
         def objective(params):
-            """Scalar loss: total squared Hildebrand violation (to be minimised)."""
             _, _, total_viol = get_purity_and_violation(params)
             return total_viol
 
-        # L-BFGS solver; `maxiter=step_mes` so one `.run()` call = one chunk.
         solver = LBFGS(fun=objective, maxiter=step_mes, tol=1e-11)
 
-        # ---- Initialise batch of states ------------------------------------
         print(f"Generating {num_starts} initial states (gap={gap})…")
         init_params_list = []
         for _ in range(num_starts):
             psi_init = rand_Almost_Stab_state(n, gap)
             psi_np   = psi_init.get() if hasattr(psi_init, "get") else np.array(psi_init)
-            # Stack real and imaginary parts into a flat real vector for JAX.
-            p = np.concatenate([np.real(psi_np), np.imag(psi_np)])
+            p        = np.concatenate([np.real(psi_np), np.imag(psi_np)])
             init_params_list.append(p)
         params_batch = jnp.array(init_params_list, dtype=jnp.float64)
 
-        # vmap both the metric function and the solver over the batch axis.
         vmapped_metrics = jax.vmap(get_purity_and_violation)
         vmapped_run     = jax.vmap(solver.run)
 
-        # Per-trajectory history lists (one entry per snapshot).
         traj_avg_p = [[] for _ in range(num_starts)]
         traj_max_p = [[] for _ in range(num_starts)]
         traj_viol  = [[] for _ in range(num_starts)]
         traj_sre   = [[] for _ in range(num_starts)]
 
-        # ---- Step 0: record metrics for the initial states -----------------
         start_time = time.time()
         avg_p, max_p, viol = vmapped_metrics(params_batch)
         avg_p_cpu, max_p_cpu, viol_cpu = (
             np.array(avg_p), np.array(max_p), np.array(viol)
         )
         states_complex = params_batch[:, :n_dim] + 1j * params_batch[:, n_dim:]
-        sre_vals_cpu   = compute_sre_native_cupy_batch(states_complex, alpha=2)
+        sre_vals_cpu   = compute_sre_batch(states_complex, alpha=2)
 
         for i in range(num_starts):
             traj_avg_p[i].append(float(avg_p_cpu[i]))
@@ -658,21 +482,18 @@ def _(
             traj_viol[i].append(float(viol_cpu[i]))
             traj_sre[i].append(float(sre_vals_cpu[i]))
 
-        # ---- Optimisation loop (chunked for periodic SRE snapshots) --------
         num_chunks = max(1, num_loops // step_mes)
 
         for chunk_idx in range(1, num_chunks + 1):
-            # Run `step_mes` L-BFGS steps for all trajectories simultaneously.
             res          = vmapped_run(params_batch)
             params_batch = res.params
 
-            # Compute and record metrics for this snapshot.
             avg_p, max_p, viol = vmapped_metrics(params_batch)
             avg_p_cpu, max_p_cpu, viol_cpu = (
                 np.array(avg_p), np.array(max_p), np.array(viol)
             )
             states_complex = params_batch[:, :n_dim] + 1j * params_batch[:, n_dim:]
-            sre_vals_cpu   = compute_sre_native_cupy_batch(states_complex, alpha=2)
+            sre_vals_cpu   = compute_sre_batch(states_complex, alpha=2)
 
             for i in range(num_starts):
                 traj_avg_p[i].append(float(avg_p_cpu[i]))
@@ -680,7 +501,6 @@ def _(
                 traj_viol[i].append(float(viol_cpu[i]))
                 traj_sre[i].append(float(sre_vals_cpu[i]))
 
-            # Progress report every chunk.
             elapsed = time.time() - start_time
             est_rem = (elapsed / chunk_idx) * (num_chunks - chunk_idx)
             print(
@@ -691,7 +511,6 @@ def _(
                 f"Est. Remaining: {est_rem:.1f}s"
             )
 
-        # ---- Collect final states and save ---------------------------------
         final_states = [
             np.array(params_batch[i, :n_dim] + 1j * params_batch[i, n_dim:])
             for i in range(num_starts)
@@ -711,35 +530,15 @@ def _(
         print(f"Saved trajectory data → {filename}")
         return trajectories
 
-    return (run_jax_gpu_optimization,)
+    return (run_jax_optimization,)
 
 
 # ---------------------------------------------------------------------------
-# Cell 8 – Utility: pack multiple .pkl files into one archive
+# Cell 8 – Utility: Pack Multiple .pkl Files into One Archive
 # ---------------------------------------------------------------------------
 @app.cell
 def _(os, pickle):
-    """
-    Utility for combining per-gap output files into a single archive.
-
-    The archive is itself a pickle whose top-level value is a dict mapping
-    original filenames to their loaded contents.  This makes it easy to
-    transfer a full run (all gap values) as a single file.
-    """
-
     def pack_pkl_files(source_dir_or_files, output_archive_path: str) -> None:
-        """
-        Combine multiple .pkl files into one merged archive.
-
-        Parameters
-        ----------
-        source_dir_or_files : str | list[str]
-            Either a directory path (all .pkl files inside are packed in
-            sorted order) or an explicit list of file paths.
-        output_archive_path : str
-            Destination path for the merged .pkl archive.
-        """
-        # Resolve the list of source files.
         if isinstance(source_dir_or_files, str):
             if not os.path.exists(source_dir_or_files):
                 print(f"Error: directory '{source_dir_or_files}' does not exist.")
@@ -752,7 +551,6 @@ def _(os, pickle):
         else:
             file_paths = list(source_dir_or_files)
 
-        # Load each file and accumulate into the merged dict.
         packed_data = {}
         for fpath in file_paths:
             fname = os.path.basename(fpath)
@@ -763,7 +561,6 @@ def _(os, pickle):
             except Exception as exc:
                 print(f"  Error reading {fname}: {exc}")
 
-        # Ensure the output directory exists.
         out_dir = os.path.dirname(output_archive_path)
         if out_dir and not os.path.exists(out_dir):
             os.makedirs(out_dir)
@@ -779,21 +576,10 @@ def _(os, pickle):
 
 
 # ---------------------------------------------------------------------------
-# Cell 9 – Data generation driver: iterate over stabilizer gaps
+# Cell 9 – Data Generation Driver: Iterate over Stabilizer Gaps
 # ---------------------------------------------------------------------------
 @app.cell
-def _(os, pack_pkl_files, run_jax_gpu_optimization):
-    """
-    Iterate over all stabilizer-gap values and call the optimiser for each one.
-
-    Gap range: [5, N] (inclusive), so the 'almost-stabilizer' parameter
-    ranges from gap=0 (pure stabilizer) down to gap=N-5.
-
-    Each gap produces one .pkl file.  If a file already exists it is skipped,
-    allowing interrupted runs to resume.  After each gap the individual files
-    are merged into a running archive via `pack_pkl_files`.
-    """
-
+def _(os, pack_pkl_files, run_jax_optimization):
     def gen_data(
         n_qubits: int,
         num_seeds: int,
@@ -801,20 +587,8 @@ def _(os, pack_pkl_files, run_jax_gpu_optimization):
         step_mes: int,
         f_name: str,
     ) -> None:
-        """
-        Run the optimiser for every stabilizer-gap value and pack results.
-
-        Parameters
-        ----------
-        n_qubits  : system size N.
-        num_seeds : number of parallel trajectories per gap.
-        num_steps : total L-BFGS micro-iterations per gap.
-        step_mes  : snapshot interval (chunk size).
-        f_name    : filename prefix; individual files are named
-                    <f_name><num_steps>_stps_<gap>.pkl.
-        """
-        for _stab_qubits in range(5, n_qubits + 1):
-            gap      = n_qubits - _stab_qubits   # number of 'free' qubits
+        for _stab_qubits in range(0, n_qubits + 1):
+            gap      = n_qubits - _stab_qubits
             out_file = f"{f_name}{num_steps}_stps_{gap}.pkl"
 
             if os.path.exists(out_file):
@@ -824,7 +598,7 @@ def _(os, pack_pkl_files, run_jax_gpu_optimization):
             print(f"\nComputing {n_qubits}-qubit, gap={gap} "
                   f"({_stab_qubits}-qubit stabilized initial state).")
 
-            run_jax_gpu_optimization(
+            run_jax_optimization(
                 n_qubits  = n_qubits,
                 num_starts= num_seeds,
                 num_loops = num_steps,
@@ -833,17 +607,17 @@ def _(os, pack_pkl_files, run_jax_gpu_optimization):
                 filename  = out_file,
             )
 
-            # Update the merged archive after each gap completes.
             pack_pkl_files("zip1", "file1.pkl")
 
     return (gen_data,)
 
 
 # ---------------------------------------------------------------------------
-# Cell 10 – Orchestration: read UI values, run simulation, display status
+# Cell 10 – Orchestration: Read UI Values or CLI Prompts, Run Simulation
 # ---------------------------------------------------------------------------
 @app.cell
 def _(
+    argparse,
     chunk_size_input,
     gen_data,
     mo,
@@ -852,15 +626,8 @@ def _(
     num_steps_input,
     os,
     run_button,
+    sys,
 ):
-    """
-    Orchestration cell: reads the UI parameters, creates the output directory,
-    and calls gen_data.
-
-    In interactive mode execution is gated by `run_button` to prevent
-    accidental restarts.  In script mode (e.g. `uv run Generate_States.py`)
-    the simulation starts automatically using the default slider values.
-    """
     is_script_mode = mo.app_meta().mode == "script"
     should_run     = is_script_mode or run_button.value
 
@@ -871,9 +638,48 @@ def _(
         seeds    = num_seeds_input.value
         steps    = num_steps_input.value
         step_mes = chunk_size_input.value
-        prefix   = f"zip1/{N}_qbt_{seeds}_sds_ptmzng_jfr_"
 
-        print("=======================================================")
+        # Interactive CLI prompting and argument parsing when run as a standalone script
+        if is_script_mode:
+            parser = argparse.ArgumentParser(description="7-Qubit State Optimization & SRE Trajectory Generator")
+            parser.add_argument("--qubits", type=int, default=None, help="Number of qubits N (default: 7)")
+            parser.add_argument("--seeds", type=int, default=None, help="Number of seed samples (default: 4000)")
+            parser.add_argument("--steps", type=int, default=None, help="Number of optimization steps (default: 50)")
+            parser.add_argument("--chunk-size", type=int, default=None, help="Snapshot chunk size / step_mes (default: 1)")
+
+            cli_args, _ = parser.parse_known_args()
+
+            # CLI flags take highest precedence
+            if cli_args.qubits is not None:     N = cli_args.qubits
+            if cli_args.seeds is not None:      seeds = cli_args.seeds
+            if cli_args.steps is not None:      steps = cli_args.steps
+            if cli_args.chunk_size is not None: step_mes = cli_args.chunk_size
+
+            # Interactive terminal prompts if run directly from terminal without flags
+            if (cli_args.qubits is None and cli_args.seeds is None and
+                cli_args.steps is None and cli_args.chunk_size is None and
+                sys.stdin.isatty()):
+
+                print("\n=======================================================")
+                print(" 📋 Simulation Parameter Selection (Script Mode)")
+                print(" Press [Enter] to accept the default value shown.")
+                print("=======================================================")
+
+                def _prompt_int(label, default_val):
+                    try:
+                        val_str = input(f" {label} [default {default_val}]: ").strip()
+                        return int(val_str) if val_str else default_val
+                    except Exception:
+                        return default_val
+
+                N        = _prompt_int("Qubits (N)", N)
+                seeds    = _prompt_int("Num Seeds (Samples)", seeds)
+                steps    = _prompt_int("Optimisation Steps", steps)
+                step_mes = _prompt_int("Chunk Size (step_mes)", step_mes)
+
+        prefix = f"zip1/{N}_qbt_{seeds}_sds_ptmzng_jfr_"
+
+        print("\n=======================================================")
         print(f"Running simulation: {N} Qubits | {seeds} Seeds | "
               f"{steps} Steps | Chunk size = {step_mes}")
         print(f"Output prefix: {prefix}")
