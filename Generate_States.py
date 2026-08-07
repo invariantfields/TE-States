@@ -7,20 +7,17 @@
 #     "scipy>=1.12.0",
 #
 #     # ── GPU dependency: optional (code automatically falls back to CPU if absent) ──
-#     # CUDA 13: "cupy-cuda13x>=14.0.0", "jax[cuda13]>=0.4.30"
-#     # CUDA 12: "cupy-cuda12x>=13.0.0", "jax[cuda12]>=0.4.30"
+#     # CUDA 13: "cupy-cuda13x>=14.0.0", "jax[cuda13]>=0.4.30", "nvidia-curand-cu13"
+#     # CUDA 12: "cupy-cuda12x>=13.0.0", "jax[cuda12]>=0.4.30", "nvidia-curand-cu12"
 # ]
 # ///
 
 import marimo
 
-__generated_with = "0.23.15"
+__generated_with = "0.23.16"
 app = marimo.App(width="medium", auto_download=["html"])
 
 
-# ---------------------------------------------------------------------------
-# Cell 1 – Imports, Hardware Detection & JAX/XLA Configuration
-# ---------------------------------------------------------------------------
 @app.cell
 def _():
     """
@@ -79,13 +76,24 @@ def _():
 
     # 64-bit precision is essential for the L-BFGS convergence tolerances used later
     jax.config.update("jax_enable_x64", True)
+    return (
+        LBFGS,
+        USE_GPU,
+        argparse,
+        combinations,
+        jax,
+        jnp,
+        mo,
+        np,
+        os,
+        pickle,
+        reduce,
+        sys,
+        time,
+        xp,
+    )
 
-    return LBFGS, USE_GPU, argparse, combinations, cp, jax, jnp, mo, np, os, pickle, reduce, sys, time, xp
 
-
-# ---------------------------------------------------------------------------
-# Cell 2 – Notebook Title and Description
-# ---------------------------------------------------------------------------
 @app.cell
 def _(USE_GPU, mo):
     mode_str = "🚀 GPU-accelerated (CuPy + JAX CUDA)" if USE_GPU else "💻 CPU fallback mode (NumPy + JAX CPU)"
@@ -109,9 +117,6 @@ def _(USE_GPU, mo):
     return
 
 
-# ---------------------------------------------------------------------------
-# Cell 3 – Interactive Parameter Controls
-# ---------------------------------------------------------------------------
 @app.cell
 def _(mo):
     """
@@ -122,6 +127,7 @@ def _(mo):
     - num_steps_input  : total number of L-BFGS micro-iterations per trajectory.
     - chunk_size_input : how many L-BFGS steps to take between metric snapshots
                          (labelled `step_mes` internally).
+    - output_dir_input : directory path where output .pkl files will be saved.
     - run_button       : gate that prevents accidental re-runs on parameter
                          changes in interactive mode.
     """
@@ -141,24 +147,32 @@ def _(mo):
         start=1, stop=500, value=1, step=1,
         label="Chunk Size (step_mes)",
     )
+    output_dir_input = mo.ui.text(
+        value="zip1",
+        label="Output Directory",
+    )
     run_button = mo.ui.run_button(label="🚀 Run Data Generation")
 
     mo.hstack(
         [
             mo.vstack([n_qubits_slider, num_seeds_input]),
             mo.vstack([num_steps_input, chunk_size_input]),
-            run_button,
+            mo.vstack([output_dir_input, run_button]),
         ],
         align="center",
         justify="start",
         gap=3,
     )
-    return chunk_size_input, n_qubits_slider, num_seeds_input, num_steps_input, run_button
+    return (
+        chunk_size_input,
+        n_qubits_slider,
+        num_seeds_input,
+        num_steps_input,
+        output_dir_input,
+        run_button,
+    )
 
 
-# ---------------------------------------------------------------------------
-# Cell 4 – SRE Cache & Batch SRE Computation (FWHT Kernel - GPU/CPU Unified)
-# ---------------------------------------------------------------------------
 @app.cell
 def _(USE_GPU, np, xp):
     """
@@ -253,9 +267,6 @@ def _(USE_GPU, np, xp):
     return (compute_sre_batch,)
 
 
-# ---------------------------------------------------------------------------
-# Cell 5 – Random Stabilizer-State Generator (Symplectic Clifford Circuit)
-# ---------------------------------------------------------------------------
 @app.cell
 def _(np):
     """
@@ -319,9 +330,6 @@ def _(np):
     return (generate_random_generators_symplectic,)
 
 
-# ---------------------------------------------------------------------------
-# Cell 6 – Stabilizer Projector & Almost-Stabilizer Initial States
-# ---------------------------------------------------------------------------
 @app.cell
 def _(generate_random_generators_symplectic, reduce, xp):
     """
@@ -379,9 +387,6 @@ def _(generate_random_generators_symplectic, reduce, xp):
     return (rand_Almost_Stab_state,)
 
 
-# ---------------------------------------------------------------------------
-# Cell 7 – JAX/L-BFGS Batch Optimiser with SRE Trajectory Logging
-# ---------------------------------------------------------------------------
 @app.cell
 def _(
     LBFGS,
@@ -533,53 +538,8 @@ def _(
     return (run_jax_optimization,)
 
 
-# ---------------------------------------------------------------------------
-# Cell 8 – Utility: Pack Multiple .pkl Files into One Archive
-# ---------------------------------------------------------------------------
 @app.cell
-def _(os, pickle):
-    def pack_pkl_files(source_dir_or_files, output_archive_path: str) -> None:
-        if isinstance(source_dir_or_files, str):
-            if not os.path.exists(source_dir_or_files):
-                print(f"Error: directory '{source_dir_or_files}' does not exist.")
-                return
-            file_paths = [
-                os.path.join(source_dir_or_files, f)
-                for f in sorted(os.listdir(source_dir_or_files))
-                if f.endswith(".pkl")
-            ]
-        else:
-            file_paths = list(source_dir_or_files)
-
-        packed_data = {}
-        for fpath in file_paths:
-            fname = os.path.basename(fpath)
-            try:
-                with open(fpath, "rb") as f:
-                    packed_data[fname] = pickle.load(f)
-                print(f"  Packed: {fname}")
-            except Exception as exc:
-                print(f"  Error reading {fname}: {exc}")
-
-        out_dir = os.path.dirname(output_archive_path)
-        if out_dir and not os.path.exists(out_dir):
-            os.makedirs(out_dir)
-
-        try:
-            with open(output_archive_path, "wb") as f:
-                pickle.dump(packed_data, f)
-            print(f"\nArchive saved ({len(packed_data)} files) → {output_archive_path}")
-        except Exception as exc:
-            print(f"Error saving archive: {exc}")
-
-    return (pack_pkl_files,)
-
-
-# ---------------------------------------------------------------------------
-# Cell 9 – Data Generation Driver: Iterate over Stabilizer Gaps
-# ---------------------------------------------------------------------------
-@app.cell
-def _(os, pack_pkl_files, run_jax_optimization):
+def _(os, run_jax_optimization):
     def gen_data(
         n_qubits: int,
         num_seeds: int,
@@ -607,14 +567,9 @@ def _(os, pack_pkl_files, run_jax_optimization):
                 filename  = out_file,
             )
 
-            pack_pkl_files("zip1", "file1.pkl")
-
     return (gen_data,)
 
 
-# ---------------------------------------------------------------------------
-# Cell 10 – Orchestration: Read UI Values or CLI Prompts, Run Simulation
-# ---------------------------------------------------------------------------
 @app.cell
 def _(
     argparse,
@@ -624,6 +579,7 @@ def _(
     n_qubits_slider,
     num_seeds_input,
     num_steps_input,
+    output_dir_input,
     os,
     run_button,
     sys,
@@ -632,12 +588,11 @@ def _(
     should_run     = is_script_mode or run_button.value
 
     if should_run:
-        os.makedirs("zip1", exist_ok=True)
-
-        N        = n_qubits_slider.value
-        seeds    = num_seeds_input.value
-        steps    = num_steps_input.value
-        step_mes = chunk_size_input.value
+        N          = n_qubits_slider.value
+        seeds      = num_seeds_input.value
+        steps      = num_steps_input.value
+        step_mes   = chunk_size_input.value
+        output_dir = output_dir_input.value or "zip1"
 
         # Interactive CLI prompting and argument parsing when run as a standalone script
         if is_script_mode:
@@ -646,6 +601,7 @@ def _(
             parser.add_argument("--seeds", type=int, default=None, help="Number of seed samples (default: 4000)")
             parser.add_argument("--steps", type=int, default=None, help="Number of optimization steps (default: 50)")
             parser.add_argument("--chunk-size", type=int, default=None, help="Snapshot chunk size / step_mes (default: 1)")
+            parser.add_argument("--output-dir", type=str, default=None, help="Output directory to save .pkl files (default: zip1)")
 
             cli_args, _ = parser.parse_known_args()
 
@@ -654,11 +610,12 @@ def _(
             if cli_args.seeds is not None:      seeds = cli_args.seeds
             if cli_args.steps is not None:      steps = cli_args.steps
             if cli_args.chunk_size is not None: step_mes = cli_args.chunk_size
+            if cli_args.output_dir is not None: output_dir = cli_args.output_dir
 
             # Interactive terminal prompts if run directly from terminal without flags
             if (cli_args.qubits is None and cli_args.seeds is None and
                 cli_args.steps is None and cli_args.chunk_size is None and
-                sys.stdin.isatty()):
+                cli_args.output_dir is None and sys.stdin.isatty()):
 
                 print("\n=======================================================")
                 print(" 📋 Simulation Parameter Selection (Script Mode)")
@@ -672,16 +629,26 @@ def _(
                     except Exception:
                         return default_val
 
-                N        = _prompt_int("Qubits (N)", N)
-                seeds    = _prompt_int("Num Seeds (Samples)", seeds)
-                steps    = _prompt_int("Optimisation Steps", steps)
-                step_mes = _prompt_int("Chunk Size (step_mes)", step_mes)
+                def _prompt_str(label, default_val):
+                    try:
+                        val_str = input(f" {label} [default '{default_val}']: ").strip()
+                        return val_str if val_str else default_val
+                    except Exception:
+                        return default_val
 
-        prefix = f"zip1/{N}_qbt_{seeds}_sds_ptmzng_jfr_"
+                N          = _prompt_int("Qubits (N)", N)
+                seeds      = _prompt_int("Num Seeds (Samples)", seeds)
+                steps      = _prompt_int("Optimisation Steps", steps)
+                step_mes   = _prompt_int("Chunk Size (step_mes)", step_mes)
+                output_dir = _prompt_str("Output Directory", output_dir)
+
+        os.makedirs(output_dir, exist_ok=True)
+        prefix = os.path.join(output_dir, f"{N}_qbt_{seeds}_sds_ptmzng_jfr_")
 
         print("\n=======================================================")
         print(f"Running simulation: {N} Qubits | {seeds} Seeds | "
               f"{steps} Steps | Chunk size = {step_mes}")
+        print(f"Output directory: {output_dir}")
         print(f"Output prefix: {prefix}")
         print("=======================================================")
 
@@ -694,7 +661,7 @@ def _(
         )
 
         status_md = mo.md(
-            f"✅ **Simulation complete!** Data saved under prefix `{prefix}`"
+            f"✅ **Simulation complete!** Data saved in directory `{output_dir}` with prefix `{prefix}`"
         )
     else:
         status_md = mo.md(

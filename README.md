@@ -7,7 +7,6 @@ This repository generates **Stabilizer Rényi Entropy (SRE)** trajectories for $
 ## 📌 Notebooks
 
 - **[`Generate_States.py`](Generate_States.py)**: Unified marimo notebook with automatic hardware detection. Runs with **GPU acceleration** (CuPy + JAX CUDA) when a CUDA GPU is present, and **automatically falls back to CPU** (NumPy + JAX CPU) if no GPU is available.
-- **[`Generate_States.ipynb`](Generate_States.ipynb)**: Exported Jupyter notebook format.
 
 ---
 
@@ -60,13 +59,13 @@ Choose the command that matches your hardware setup:
 pip install -e .
 
 # Option B: GPU mode with CUDA 12 (RTX 30xx/40xx, A100, etc.)
-pip install -e ".[gpu-cuda12]"
+pip install -e ".[cuda12]"
 
 # Option C: GPU mode with CUDA 13
-pip install -e ".[gpu-cuda13]"
+pip install -e ".[cuda13]"
 ```
 
-*(To install extra development tools like `nbformat` and `ruff`, add `,dev`, e.g., `pip install -e ".[dev]"`)*
+*(To install extra development tools like `ruff`, add `,dev`, e.g., `pip install -e ".[dev]"`)*
 
 ---
 
@@ -107,13 +106,4 @@ You can also pass arguments directly via CLI flags to bypass prompts:
 
 ```bash
 python Generate_States.py --qubits 7 --seeds 4000 --steps 50 --chunk-size 1
-```
-
----
-
-### 3. Jupyter Notebook
-
-```bash
-pip install jupyter
-jupyter lab Generate_States.ipynb
 ```

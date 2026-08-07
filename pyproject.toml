@@ -26,22 +26,23 @@ py-modules = ["Generate_States"]
 [project.optional-dependencies]
 
 # CUDA 12 — RTX 30xx / 40xx, A100, H100 with CUDA 12 toolkit
-# Install with:  pip install ".[gpu-cuda12]"
-gpu-cuda12 = [
+# Install with:  pip install ".[cuda12]"
+cuda12 = [
     "cupy-cuda12x>=13.0.0",   # CuPy wheel built against CUDA 12.x
     "jax[cuda12]>=0.4.30",    # JAX with CUDA 12 XLA backend
+    "nvidia-curand-cu12",     # Required for CuPy random number generation (curand)
 ]
 
 # CUDA 13 — RTX 50xx, H100 / H200 with CUDA 13 toolkit
-# Install with:  pip install ".[gpu-cuda13]"
-gpu-cuda13 = [
+# Install with:  pip install ".[cuda13]"
+cuda13 = [
     "cupy-cuda13x>=14.0.0",   # CuPy wheel built against CUDA 13.x
     "jax[cuda13]>=0.4.30",    # JAX with CUDA 13 XLA backend
+    "nvidia-curand-cu13",     # Required for CuPy random number generation (curand)
 ]
 
-# Development tooling (linting, notebook export)
+# Development tooling (linting)
 # Install with:  pip install ".[dev]"
 dev = [
-    "nbformat>=5.9.0",        # Required for `marimo export ipynb`
     "ruff>=0.4.0",            # Fast Python linter / formatter
 ]
