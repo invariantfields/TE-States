@@ -107,3 +107,43 @@ You can also pass arguments directly via CLI flags to bypass prompts:
 ```bash
 python Generate_States.py --qubits 7 --seeds 4000 --steps 50 --chunk-size 1
 ```
+
+---
+
+## 📂 Dataset Directories & Experiment Specifications
+
+This repository contains trajectory dataset runs stored in `.pkl` pickle files across several experiment directories:
+
+| Directory | Qubits ($N$) | Seeds (Samples) | Optimization Steps | Stabilizer Gaps ($q$) | Experiments Included |
+| :--- | :---: | :---: | :---: | :---: | :--- |
+| **`zip7/`** | 7 | 1000 & 2000 | 2500 | $q \in \{0, 1, 2, 3, 4, 5, 6, 7\}$ | • `7q_1000sds_2500stps` (8 runs)<br>• `7q_2000sds_2500stps` (8 runs) |
+| **`zip42/`** | 4 | 4000 | 100 & 200 | $q \in \{0, 1, 2, 3, 4\}$ | • `4q_4000sds_100stps` (5 runs)<br>• `4q_4000sds_200stps` (5 runs) |
+| **`zip4/`** | 4 | 4000 & 5000 | 100 & 40 | $q \in \{0, 1, 2, 3, 4\}$ | • `4q_4000sds_100stps` (5 runs)<br>• `4q_5000sds_40stps` (5 runs) |
+| **`zip41/`** | 4 | 4000 | 100 | $q \in \{0, 1, 2, 3, 4\}$ | • `4q_4000sds_100stps` (5 runs) |
+
+### File Naming Scheme
+Dataset files follow the convention:
+`{N}_qbt_{seeds}_sds_{method}_{steps}_stps_{gap}.pkl`
+- `{N}_qbt`: System qubit size $N$
+- `{seeds}_sds`: Number of trajectory state samples
+- `{steps}_stps`: Optimization iterations
+- `{gap}`: Initial stabilizer gap $q = N - k$
+
+---
+
+## 📊 Generating Plots & Visualizations
+
+Use [`generate_plots.py`](generate_plots.py) to automatically group dataset files by experiment parameters and output line charts and Stabilizer Rényi Entropy (SRE) histograms:
+
+```bash
+python generate_plots.py <dataset_directory>
+```
+
+**Usage Examples:**
+```bash
+python generate_plots.py zip7
+python generate_plots.py zip42
+```
+
+Plots are saved to the `plots/` directory with explicit tags identifying the run parameters (e.g., `4q_4000sds_100stps_TE.png`, `4q_4000sds_100stps_Hist.png`).
+
