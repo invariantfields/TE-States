@@ -57,22 +57,39 @@ def is_TE_dataset(states, dim=2):
     return te_flags
 
 
-def parse_filename_info(filepath):
+def parse_filename_info(filepath, traj_len=None):
     filename = os.path.basename(filepath)
-    m = re.search(r"^(\d+)_qbt_(\d+)_sds_(.*?)(\d+)_stps_(\d+)\.pkl$", filename)
+    m = re.search(
+        r"^(\d+)_qbt_(\d+)_sds_(.*?)(\d+)_stps_(?:(\d+)_(?:chunk|chk)_)?(\d+)\.pkl$",
+        filename,
+    )
     if m:
-        qbt, sds, mid, stps, gap = m.groups()
+        qbt, sds, mid, stps, fn_chunk, gap = m.groups()
+        qbt_val = int(qbt)
+        sds_val = int(sds)
+        stps_val = int(stps)
+        gap_val = int(gap)
         mid_clean = mid.strip("_")
-        tag_parts = [f"{qbt}q", f"{sds}sds", f"{stps}stps"]
+
+        if fn_chunk is not None:
+            chunk_size = int(fn_chunk)
+        elif traj_len is not None and traj_len > 1:
+            chunk_size = int(round(stps_val / (traj_len - 1)))
+        else:
+            chunk_size = stps_val
+
+        tag_parts = [f"{qbt_val}q", f"{sds_val}sds", f"{stps_val}stps", f"{chunk_size}chunk"]
         if mid_clean and mid_clean != "ptmzng_jfr":
             tag_parts.insert(2, mid_clean)
         short_tag = "_".join(tag_parts)
+
         return {
-            "qbt": int(qbt),
-            "sds": int(sds),
-            "stps": int(stps),
-            "gap": int(gap),
-            "label": f"$q={gap}$",
+            "qbt": qbt_val,
+            "sds": sds_val,
+            "stps": stps_val,
+            "gap": gap_val,
+            "chunk_size": chunk_size,
+            "label": f"$q={gap_val}$",
             "short_tag": short_tag,
         }
 
@@ -81,13 +98,19 @@ def parse_filename_info(filepath):
     prefix = re.sub(r"_\d+\.pkl$", "", filename)
     if prefix == filename:
         prefix = os.path.splitext(filename)[0]
+
+    chunk_size = 50
+    if traj_len is not None and traj_len > 1:
+        chunk_size = int(round(2500 / (traj_len - 1)))
+
     return {
         "qbt": 7,
         "sds": 2000,
         "stps": 2500,
         "gap": gap_val,
+        "chunk_size": chunk_size,
         "label": f"$q={gap_val}$",
-        "short_tag": prefix,
+        "short_tag": f"{prefix}_{chunk_size}chunk",
     }
 
 
@@ -97,20 +120,32 @@ def parse_gap_sort_key(filepath):
 
 
 def get_dynamic_step_mes(file_path, traj_len):
-    info = parse_filename_info(file_path)
-    if info.get("stps") and traj_len > 1:
-        return float(info["stps"]) / (traj_len - 1)
-    return 50.0
+    info = parse_filename_info(file_path, traj_len=traj_len)
+    return float(info["chunk_size"])
 
 
 def load_dataset_runs(data_dir="zip7"):
-    files = sorted(glob.glob(os.path.join(data_dir, "*.pkl")), key=parse_gap_sort_key)
-    run_groups = defaultdict(list)
+    files = glob.glob(os.path.join(data_dir, "*.pkl"))
+    loaded_items = []
     for f in files:
         with open(f, "rb") as fp:
             data = pickle.load(fp)
-        info = parse_filename_info(f)
+
+        traj_len = 1
+        for metric_key in ["sre", "average_purity", "max_purity"]:
+            if metric_key in data and len(data[metric_key]) > 0:
+                traj_len = len(data[metric_key][0])
+                break
+
+        info = parse_filename_info(f, traj_len=traj_len)
+        loaded_items.append((data, info, f))
+
+    loaded_items.sort(key=lambda item: item[1]["gap"])
+
+    run_groups = defaultdict(list)
+    for data, info, f in loaded_items:
         run_groups[info["short_tag"]].append((data, info, f))
+
     return run_groups
 
 
