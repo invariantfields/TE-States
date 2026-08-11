@@ -157,3 +157,13 @@ python generate_plots_with_numbers.py Initial_Magic_data
 
 Plots are saved to the `plots/` directory with explicit tags identifying all run parameters (e.g., `4q_2000sds_200stps_200chunk_Hist.png`).
 
+
+---
+
+## 🧮 LP Bounds (`LP_bound/`)
+
+The `LP_bound/` directory contains SageMath scripts and Jupyter notebooks for computing and verifying exact rational linear programming (LP) bounds related to the existence of $k$-TE (T-Entangled) states.
+
+- **`fun.sage`**: Core SageMath module that builds the standard form LP constraint matrices ($A, b, c$) using Krawtchouk polynomials.
+- **`LPrational.ipynb`**: Solves the exact primal and dual Mixed Integer Linear Programs (MILP) over the rationals ($\mathbb{Q}$), checks for strong duality ($c x^T = y b$), and saves the exact solutions to a SageMath object file (`.sobj`).
+- **`LPrational_TE.ipynb` & `CheckLPsolutions.ipynb`**: Load the generated `.sobj` exact solutions and formally verify that they satisfy the APPT condition across all specified qubit sizes $N$, proving compatibility with the existence of $(\lfloor N/2 \rfloor - 1)$-TE states.
