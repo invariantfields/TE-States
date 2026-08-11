@@ -6,7 +6,7 @@ This repository generates **Stabilizer Rényi Entropy (SRE)** trajectories for $
 
 ## Notebooks
 
-- **[`Generate_States.py`](Generate_States.py)**: Unified marimo notebook with automatic hardware detection. Runs with **GPU acceleration** (CuPy + JAX CUDA) when a CUDA GPU is present, and **automatically falls back to CPU** (NumPy + JAX CPU) if no GPU is available.
+- **[`Generate_States.py`](Generate_States.py)** [![Open in molab](https://marimo.io/molab-shield.svg)](https://molab.marimo.io/github/invariantfields/TE-States/blob/main/Generate_States.py): Unified marimo notebook with automatic hardware detection. Runs with **GPU acceleration** (CuPy + JAX CUDA) when a CUDA GPU is present, and **automatically falls back to CPU** (NumPy + JAX CPU) if no GPU is available.
 
 ---
 
