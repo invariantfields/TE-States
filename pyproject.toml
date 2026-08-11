@@ -14,6 +14,7 @@ dependencies = [
     "marimo>=0.10.0",
     "numpy>=2.0.0",
     "scipy>=1.12.0",
+    "matplotlib>=3.8.0", # Required for generate_plots.py
     "jax>=0.4.30",       # CPU backend; GPU variants installed via extras below
     "jaxopt>=0.8.5",
 ]
@@ -24,6 +25,12 @@ py-modules = ["Generate_States"]
 # ── Optional GPU extras ──────────────────────────────────────────────────────
 # Install the block that matches your installed CUDA toolkit.
 [project.optional-dependencies]
+
+# LP Bounds / SageMath Jupyter Notebooks
+# Install with:  pip install ".[lp]"
+lp = [
+    "jupyter>=1.0.0",
+]
 
 # CUDA 12 — RTX 30xx / 40xx, A100, H100 with CUDA 12 toolkit
 # Install with:  pip install ".[cuda12]"

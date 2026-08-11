@@ -63,6 +63,9 @@ pip install -e ".[cuda12]"
 
 # Option C: GPU mode with CUDA 13
 pip install -e ".[cuda13]"
+
+# Option D: Include dependencies for running LP_bound Jupyter notebooks
+pip install -e ".[lp]"
 ```
 
 *(To install extra development tools like `ruff`, add `,dev`, e.g., `pip install -e ".[dev]"`)*
@@ -161,6 +164,8 @@ Plots are saved to the `plots/` directory with explicit tags identifying all run
 ---
 
 ## LP Bounds (`LP_bound/`)
+
+> **Note:** Executing the notebooks in this directory requires a [SageMath](https://www.sagemath.org/) installation (typically installed via your system package manager or Conda) and the `lp` dependency extra (`pip install -e ".[lp]"`).
 
 The `LP_bound/` directory contains SageMath scripts and Jupyter notebooks for computing and verifying exact rational linear programming (LP) bounds related to the existence of $k$-TE (T-Entangled) states.
 
