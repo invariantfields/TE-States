@@ -1,16 +1,16 @@
-# 🧪 TE-States: N-Qubit State Optimization & SRE Trajectory Generator
+# TE-States: N-Qubit State Optimization & SRE Trajectory Generator
 
 This repository generates **Stabilizer Rényi Entropy (SRE)** trajectories for $N$-qubit quantum states initialized from random stabilizer-gap states and optimized via JAX L-BFGS over the Hildebrand separability criterion.
 
 ---
 
-## 📌 Notebooks
+## Notebooks
 
 - **[`Generate_States.py`](Generate_States.py)**: Unified marimo notebook with automatic hardware detection. Runs with **GPU acceleration** (CuPy + JAX CUDA) when a CUDA GPU is present, and **automatically falls back to CPU** (NumPy + JAX CPU) if no GPU is available.
 
 ---
 
-## 🚀 Recommended Setup (Virtual Environment)
+## Recommended Setup (Virtual Environment)
 
 It is strongly recommended to install all dependencies inside an isolated Python virtual environment (`.venv`) and execute all code from within it.
 
@@ -69,7 +69,7 @@ pip install -e ".[cuda13]"
 
 ---
 
-## 💻 Running the Code
+## Running the Code
 
 Ensure your virtual environment is activated (`(.venv)` showing in terminal):
 
@@ -90,7 +90,7 @@ python Generate_States.py
 
 ```text
 =======================================================
- 📋 Simulation Parameter Selection (Script Mode)
+ Simulation Parameter Selection (Script Mode)
  Press [Enter] to accept the default value shown.
 =======================================================
  Qubits (N) [default 7]: 
@@ -99,7 +99,7 @@ python Generate_States.py
  Chunk Size (step_mes) [default 1]: 
 ```
 
-> 💡 **Tip:** Pressing `[Enter]` on any prompt accepts the default parameter.
+> **Tip:** Pressing `[Enter]` on any prompt accepts the default parameter.
 
 #### Command-Line Arguments (Non-Interactive / Batch / Remote Jobs)
 You can also pass arguments directly via CLI flags to bypass prompts:
@@ -110,7 +110,7 @@ python Generate_States.py --qubits 7 --seeds 4000 --steps 50 --chunk-size 1
 
 ---
 
-## 📂 Dataset Directories & Experiment Specifications
+## Dataset Directories & Experiment Specifications
 
 This repository contains trajectory dataset runs stored in `.pkl` pickle files across several experiment directories:
 
@@ -133,7 +133,7 @@ Dataset files follow the convention:
 
 ---
 
-## 📊 Generating Plots & Visualizations
+## Generating Plots & Visualizations
 
 We provide two plotting scripts:
 
@@ -160,7 +160,7 @@ Plots are saved to the `plots/` directory with explicit tags identifying all run
 
 ---
 
-## 🧮 LP Bounds (`LP_bound/`)
+## LP Bounds (`LP_bound/`)
 
 The `LP_bound/` directory contains SageMath scripts and Jupyter notebooks for computing and verifying exact rational linear programming (LP) bounds related to the existence of $k$-TE (T-Entangled) states.
 
