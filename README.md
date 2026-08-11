@@ -116,6 +116,7 @@ This repository contains trajectory dataset runs stored in `.pkl` pickle files a
 
 | Directory | Qubits ($N$) | Seeds (Samples) | Optimization Steps | Stabilizer Gaps ($q$) | Experiments Included |
 | :--- | :---: | :---: | :---: | :---: | :--- |
+| **`Initial_Magic_data/`** | 4 & 7 | 2000 | 200 & 1500 | $q \in \{0, 4, 7\}$ | • `4q_2000sds_200stps_200chunk` (2 runs)<br>• `7q_2000sds_1500stps_1500chunk` (2 runs) |
 | **`zip7/`** | 7 | 1000 & 2000 | 2500 | $q \in \{0, 1, 2, 3, 4, 5, 6, 7\}$ | • `7q_1000sds_2500stps_250chunk` (8 runs)<br>• `7q_2000sds_2500stps_250chunk` (8 runs) |
 | **`zip42/`** | 4 | 4000 | 100 & 200 | $q \in \{0, 1, 2, 3, 4\}$ | • `4q_4000sds_100stps_100chunk` (5 runs)<br>• `4q_4000sds_200stps_200chunk` (5 runs) |
 | **`zip4/`** | 4 | 4000 & 5000 | 100 & 40 | $q \in \{0, 1, 2, 3, 4\}$ | • `4q_4000sds_100stps_4chunk` (5 runs)<br>• `4q_5000sds_40stps_1chunk` (5 runs) |
@@ -134,17 +135,25 @@ Dataset files follow the convention:
 
 ## 📊 Generating Plots & Visualizations
 
-Use [`generate_plots.py`](generate_plots.py) to automatically group dataset files by experiment parameters (including chunk resolution) and output line charts and Stabilizer Rényi Entropy (SRE) histograms:
+We provide two plotting scripts:
 
+1. **Standard Plots (`generate_plots.py`)**: Groups dataset files by experiment parameters and outputs standard line charts and SRE histograms.
+2. **Annotated Plots with Numbers (`generate_plots_with_numbers.py`)**: Extends `generate_plots.py` by annotating each bar chart with exact numerical values for Magic (mean $\pm$ std), state proportions (%), and sample counts ($N$).
+
+**Usage:**
 ```bash
+# Standard plots
 python generate_plots.py <dataset_directory>
+
+# Annotated plots with numerical values (mean ± std, N)
+python generate_plots_with_numbers.py <dataset_directory>
 ```
 
-**Usage Examples:**
+**Examples:**
 ```bash
-python generate_plots.py zip7
-python generate_plots.py zip42
+python generate_plots.py Initial_Magic_data
+python generate_plots_with_numbers.py Initial_Magic_data
 ```
 
-Plots are saved to the `plots/` directory with explicit tags identifying all run parameters (e.g., `4q_4000sds_100stps_100chunk_TE.png`, `4q_4000sds_100stps_100chunk_Hist.png`).
+Plots are saved to the `plots/` directory with explicit tags identifying all run parameters (e.g., `4q_2000sds_200stps_200chunk_Hist.png`).
 
