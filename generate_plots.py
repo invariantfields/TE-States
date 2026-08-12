@@ -251,7 +251,7 @@ def plot_te_vs_non_te_sre_config(loaded_data, output_path="Hist.png"):
     fig, (ax1, ax2) = plt.subplots(
         2,
         1,
-        figsize=(9.0, 7.5),
+        figsize=(9.0, 5.0),
         sharex=True,
         facecolor="white",
         gridspec_kw={"hspace": 0},
