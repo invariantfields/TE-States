@@ -124,7 +124,8 @@ def plot_initial_magic_hist(loaded_data, output_path="Initial_Magic_plots/Initia
             else:
                 non_te_vals.append(final_sre)
 
-        x_labels.append(f"$n={info['qbt']}, q={info['gap']}$")
+        state_name = "Stab" if info["gap"] == 0 else "Haar"
+        x_labels.append(f"$n={info['qbt']}, \\text{{{state_name}}}$")
 
         init_centers.append(np.mean(init_vals) if init_vals else 0.0)
         init_errs.append(np.std(init_vals) if len(init_vals) > 1 else 0.0)
@@ -329,7 +330,7 @@ def plot_initial_magic_hist(loaded_data, output_path="Initial_Magic_plots/Initia
     ax2.set_xticks(x)
     ax2.set_xticklabels(x_labels, fontsize=10.5)
     ax2.tick_params(axis="both", labelsize=9.5)
-    ax2.set_xlabel(r"$\text{Qubits } (n) \text{ and Initial Stabilizer Gap } (q)$", fontsize=11.5)
+    ax2.set_xlabel(r"$\text{Qubits } (n) \text{ and Initial State}$", fontsize=11.5)
     ax2.set_ylabel(r"$\text{Proportion of States}$", fontsize=11.5)
     ax2.set_ylim(0, 1.38)
     ax2.set_yticks([0.0, 0.25, 0.50, 0.75, 1.00])
