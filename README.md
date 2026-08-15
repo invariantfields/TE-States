@@ -138,10 +138,11 @@ Dataset files follow the convention:
 
 ## Generating Plots & Visualizations
 
-We provide two plotting scripts:
+We provide three plotting scripts:
 
 1. **Standard Plots (`generate_plots.py`)**: Groups dataset files by experiment parameters and outputs standard line charts and SRE histograms.
 2. **Annotated Plots with Numbers (`generate_plots_with_numbers.py`)**: Extends `generate_plots.py` by annotating each bar chart with exact numerical values for Magic (mean $\pm$ std), state proportions (%), and sample counts ($N$).
+3. **Initial Magic Side-by-Side Analysis (`initial_magic.py`)**: Dedicated script for the `Initial_Magic_data/` dataset that plots all 4 test cases ($n=4, q \in \{0, 4\}$ and $n=7, q \in \{0, 7\}$) side by side in a single grouped dual-panel comparison with clean, non-overlapping staggered annotations and sample counts.
 
 **Usage:**
 ```bash
@@ -150,15 +151,22 @@ python generate_plots.py <dataset_directory>
 
 # Annotated plots with numerical values (mean ± std, N)
 python generate_plots_with_numbers.py <dataset_directory>
+
+# Initial Magic side-by-side grouped plot (all 4 cases)
+python initial_magic.py [dataset_directory] [output_directory]
 ```
 
 **Examples:**
 ```bash
-python generate_plots.py Initial_Magic_data
-python generate_plots_with_numbers.py Initial_Magic_data
+# Generate side-by-side Initial Magic plot (saved to Initial_Magic_plots/)
+python initial_magic.py
+
+# Standard and annotated plots for dataset runs (saved to plots/)
+python generate_plots.py zip7
+python generate_plots_with_numbers.py zip7
 ```
 
-Plots are saved to the `plots/` directory with explicit tags identifying all run parameters (e.g., `4q_2000sds_200stps_200chunk_Hist.png`).
+Plots from `generate_plots.py` and `generate_plots_with_numbers.py` are saved to the `plots/` directory with explicit tags identifying all run parameters (e.g., `4q_4000sds_100stps_100chunk_Hist.png`), while `initial_magic.py` outputs directly to `Initial_Magic_plots/`.
 
 
 ---
