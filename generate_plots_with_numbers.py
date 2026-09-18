@@ -1,14 +1,32 @@
 #!/usr/bin/env python3
 import os
+os.environ.setdefault("MPLCONFIGDIR", "/tmp")
 import re
 import glob
 import pickle
+import shutil
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.patheffects as pe
 from collections import defaultdict
 from itertools import combinations
 
 OUTPUT_DIR = "plots"
+
+# LaTeX font setup consistent with the paper / SAB_three_panels.pdf
+if shutil.which("latex"):
+    plt.rcParams.update({
+        "text.usetex": True,
+        "font.family": "serif",
+        "font.serif": ["Computer Modern Roman"],
+        "text.latex.preamble": r"\usepackage{amsmath}",
+    })
+else:
+    plt.rcParams.update({
+        "font.family": "serif",
+        "font.serif": ["DejaVu Serif", "Computer Modern Roman"],
+        "mathtext.fontset": "cm",
+    })
 
 
 # -------------------------------------------------------------------
@@ -183,7 +201,7 @@ def plot_linechart_config(loaded_data, filter_mode="TE States", output_path="TE.
 
     for col_idx, metric in enumerate(selected_metrics):
         ax = axes[0, col_idx]
-        ax.set_title(metric_map[metric], fontsize=13)
+        ax.set_title(metric_map[metric], fontsize=12)
 
         for data_idx, (data, info, file_path) in enumerate(loaded_data):
             final_states = data["final_states"]
@@ -233,10 +251,10 @@ def plot_linechart_config(loaded_data, filter_mode="TE States", output_path="TE.
         ax.set_xlabel(r"$\text{Optimization Steps}$", fontsize=11)
         ax.spines["top"].set_visible(True)
         ax.spines["right"].set_visible(True)
-        ax.tick_params(direction="in", top=True, right=True, which="both")
+        ax.tick_params(direction="in", top=True, right=True, which="both", labelsize=10)
         ax.grid(True, linestyle="--", linewidth=0.5, color="#e0e0e0")
         if col_idx == 1:
-            ax.legend(frameon=True, fontsize=9, loc="best")
+            ax.legend(frameon=True, fontsize=10, loc="best")
 
     fig.tight_layout()
     fig.savefig(output_path, dpi=300, bbox_inches="tight")
@@ -283,7 +301,12 @@ def plot_te_vs_non_te_sre_config(loaded_data, output_path="Hist.png"):
             else:
                 non_te_vals.append(final_sre)
 
-        x_labels.append(f"$q={info['gap']}$")
+        if info["gap"] == 0:
+            x_labels.append(r"$\text{Stab}$")
+        elif info["gap"] == info["qbt"]:
+            x_labels.append(r"$\text{Haar}$")
+        else:
+            x_labels.append(f"$q={info['gap']}$")
 
         global_init.extend(init_vals)
         global_te.extend(te_vals)
@@ -362,58 +385,90 @@ def plot_te_vs_non_te_sre_config(loaded_data, output_path="Hist.png"):
         linewidth=0.5,
         error_kw=ekw,
     )
-    ax1.set_ylabel(r"$\text{SRE } (S_2)$", fontsize=11)
+    ax1.set_ylabel(r"$\text{SRE } (S_2)$", fontsize=12)
     ax1.grid(True, linestyle="--", linewidth=0.5, color="#e0e0e0", axis="y")
+    ax1.tick_params(direction="in", top=True, right=True, which="both", labelsize=10)
 
     # Annotate ax1 bars with magic mean ± std and sample count N
     max_y1 = 0
+    stroke = [pe.withStroke(linewidth=2.0, foreground="white")]
     for i in range(len(x)):
         # Initial SRE
         m1, e1, c1 = init_centers[i], init_errs[i], init_counts[i]
-        y1 = m1 + e1
-        max_y1 = max(max_y1, y1)
-        txt1 = f"{m1:.2f}±{e1:.2f}\nN={c1}" if c1 > 0 else "N=0"
+        y1_top = m1 + e1
+
+        m2, e2, c2 = te_centers[i], te_errs[i], te_counts[i]
+        y2_top = m2 + e2
+
+        m3, e3, c3 = non_te_centers[i], non_te_errs[i], non_counts[i]
+        y3_top = m3 + e3
+
+        offset1 = 0.08
+        if abs(y2_top - y1_top) < 1.2 or abs(y2_top - y3_top) < 1.2:
+            offset2 = 0.70
+        else:
+            offset2 = 0.08
+        offset3 = 0.08
+
+        pos_y1 = y1_top + offset1
+        pos_y2 = y2_top + offset2
+        pos_y3 = y3_top + offset3
+
+        max_y1 = max(max_y1, pos_y1, pos_y2, pos_y3)
+
+        pos_x1 = x[i] - width
+        pos_x3 = x[i] + width
+        if y2_top > y1_top + 0.8:
+            pos_x1 -= 0.015
+        if y2_top > y3_top + 0.8:
+            pos_x3 += 0.015
+
+        m1_c = 0.0 if abs(m1) < 1e-5 else m1
+        e1_c = 0.0 if abs(e1) < 1e-5 else e1
+        txt1 = f"${m1_c:.2f} \\pm {e1_c:.2f}$\n$N={c1}$" if c1 > 0 else "$N=0$"
         ax1.text(
-            x[i] - width,
-            y1 + 0.05,
+            pos_x1,
+            pos_y1,
             txt1,
             ha="center",
             va="bottom",
-            fontsize=7,
-            color="#333333",
+            fontsize=9.5,
+            color="#222222",
+            path_effects=stroke,
         )
 
         # Final TE SRE
-        m2, e2, c2 = te_centers[i], te_errs[i], te_counts[i]
-        y2 = m2 + e2
-        max_y1 = max(max_y1, y2)
-        txt2 = f"{m2:.2f}±{e2:.2f}\nN={c2}" if c2 > 0 else "N=0"
-        ax1.text(
-            x[i],
-            y2 + 0.05,
+        m2_c = 0.0 if abs(m2) < 1e-5 else m2
+        e2_c = 0.0 if abs(e2) < 1e-5 else e2
+        txt2 = f"${m2_c:.2f} \\pm {e2_c:.2f}$\n$N={c2}$" if c2 > 0 else "$N=0$"
+        ax1.annotate(
             txt2,
+            xy=(x[i], pos_y2),
+            xytext=(1, 0),
+            textcoords="offset points",
             ha="center",
             va="bottom",
-            fontsize=7,
-            color="#333333",
+            fontsize=9.5,
+            color="#222222",
+            path_effects=stroke,
         )
 
         # Final non-TE SRE
-        m3, e3, c3 = non_te_centers[i], non_te_errs[i], non_counts[i]
-        y3 = m3 + e3
-        max_y1 = max(max_y1, y3)
-        txt3 = f"{m3:.2f}±{e3:.2f}\nN={c3}" if c3 > 0 else "N=0"
+        m3_c = 0.0 if abs(m3) < 1e-5 else m3
+        e3_c = 0.0 if abs(e3) < 1e-5 else e3
+        txt3 = f"${m3_c:.2f} \\pm {e3_c:.2f}$\n$N={c3}$" if c3 > 0 else "$N=0$"
         ax1.text(
-            x[i] + width,
-            y3 + 0.05,
+            pos_x3,
+            pos_y3,
             txt3,
             ha="center",
             va="bottom",
-            fontsize=7,
-            color="#333333",
+            fontsize=9.5,
+            color="#222222",
+            path_effects=stroke,
         )
 
-    ax1.set_ylim(0, max(max_y1 * 1.35, 1.0))
+    ax1.set_ylim(0, max(max_y1 * 1.25, 1.0))
 
     # Subplot 2 (Bottom): Upright Proportions
     te_props_list = []
@@ -452,43 +507,221 @@ def plot_te_vs_non_te_sre_config(loaded_data, output_path="Hist.png"):
     for i in range(len(x)):
         p_te = te_props_list[i]
         c_te = te_counts[i]
-        txt_te = f"{p_te*100:.1f}%\nN={c_te}"
+        txt_te = f"${p_te*100:.1f}\\%$\n$N={c_te}$"
         ax2.text(
             x[i] - width / 2,
             p_te + 0.02,
             txt_te,
             ha="center",
             va="bottom",
-            fontsize=7.5,
+            fontsize=10.2,
             color="#333333",
         )
 
         p_nte = non_te_props_list[i]
         c_nte = non_counts[i]
-        txt_nte = f"{p_nte*100:.1f}%\nN={c_nte}"
+        txt_nte = f"${p_nte*100:.1f}\\%$\n$N={c_nte}$" if c_nte > 0 else r"$0.0\%$" + "\n" + r"$N=0$"
         ax2.text(
             x[i] + width / 2,
             p_nte + 0.02,
             txt_nte,
             ha="center",
             va="bottom",
-            fontsize=7.5,
+            fontsize=10.2,
             color="#333333",
         )
 
     ax2.set_xticks(x)
-    ax2.set_xticklabels(x_labels, fontsize=9.5)
-    ax2.set_xlabel(r"$\text{Stabilizer gap } (q)$", fontsize=11)
-    ax2.set_ylabel(r"$\text{Proportion of States}$", fontsize=11)
+    ax2.set_xticklabels(x_labels, fontsize=10.5)
+    if any(r"\text{Stab}" in str(l) for l in x_labels):
+        ax2.set_xlabel(r"$\text{Initial State}$", fontsize=12)
+    else:
+        ax2.set_xlabel(r"$\text{Stabilizer gap } (q)$", fontsize=12)
+    ax2.set_ylabel(r"$\text{Proportion of States}$", fontsize=12)
     ax2.set_ylim(0, 1.35)
     ax2.set_yticks([0.0, 0.25, 0.50, 0.75, 1.00])
-    ax2.set_yticklabels(["0%", "25%", "50%", "75%", "100%"], fontsize=9)
+    ax2.set_yticklabels([r"$0\%$", r"$25\%$", r"$50\%$", r"$75\%$", r"$100\%$"], fontsize=10)
+    ax2.tick_params(direction="in", top=True, right=True, which="both", labelsize=10)
     ax2.grid(True, linestyle="--", linewidth=0.5, color="#e0e0e0", axis="y")
 
     handles, labels = ax1.get_legend_handles_labels()
-    ax2.legend(handles, labels, ncols=3, frameon=True, fontsize=9, loc="upper right")
+    ax2.legend(handles, labels, ncols=3, frameon=True, fontsize=10, loc="upper right")
 
     fig.subplots_adjust(hspace=0)
+    fig.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Saved: {output_path}")
+
+
+def load_initial_magic_data(data_dir="Initial_Magic_data"):
+    files = sorted(glob.glob(os.path.join(data_dir, "*.pkl")))
+    loaded_items = []
+    for f in files:
+        with open(f, "rb") as fp:
+            data = pickle.load(fp)
+        info = parse_filename_info(f)
+        info["filename"] = os.path.basename(f)
+        loaded_items.append((data, info, f))
+
+    # Sort globally by qubit count (n) then stabilizer gap (q)
+    loaded_items.sort(key=lambda item: (item[1]["qbt"], item[1]["gap"]))
+    return loaded_items
+
+
+def plot_initial_magic_hist(loaded_data, output_path="Initial_Magic_plots/Initial_Magic_data_Hist.png"):
+    fig_w, fig_h = 5.2, 5.2
+    label_fontsize = 12
+    tick_fontsize = 10.5
+    num_fontsize = 7.8
+
+    fig, (ax1, ax2) = plt.subplots(
+        2,
+        1,
+        figsize=(fig_w, fig_h),
+        sharex=True,
+        facecolor="white",
+        gridspec_kw={"hspace": 0},
+    )
+    ax1.set_facecolor("white")
+    ax2.set_facecolor("white")
+
+    x_labels = []
+    init_centers, init_errs, init_counts = [], [], []
+    te_centers, te_errs, te_counts = [], [], []
+    non_te_centers, non_te_errs, non_counts = [], [], []
+
+    for data, info, file_path in loaded_data:
+        te_mask = is_TE_dataset(data["final_states"])
+
+        init_vals = []
+        te_vals = []
+        non_te_vals = []
+
+        for j, is_te_state in enumerate(te_mask):
+            init_sre = data["sre"][j][0]
+            final_sre = data["sre"][j][-1]
+            init_vals.append(init_sre)
+            if is_te_state:
+                te_vals.append(final_sre)
+            else:
+                non_te_vals.append(final_sre)
+
+        state_name = "Stab" if info["gap"] == 0 else "Haar"
+        x_labels.append(f"$n={info['qbt']}, \\text{{{state_name}}}$")
+
+        init_centers.append(np.mean(init_vals) if init_vals else 0.0)
+        init_errs.append(np.std(init_vals) if len(init_vals) > 1 else 0.0)
+        init_counts.append(len(init_vals))
+
+        te_centers.append(np.mean(te_vals) if te_vals else 0.0)
+        te_errs.append(np.std(te_vals) if len(te_vals) > 1 else 0.0)
+        te_counts.append(len(te_vals))
+
+        non_te_centers.append(np.mean(non_te_vals) if non_te_vals else 0.0)
+        non_te_errs.append(np.std(non_te_vals) if len(non_te_vals) > 1 else 0.0)
+        non_counts.append(len(non_te_vals))
+
+    x = np.arange(len(x_labels)) * 1.22
+    width = 0.24
+    ekw = dict(elinewidth=0.8, capthick=0.8)
+
+    # Colorblind-friendly palette
+    color_init = "#009E73"  # Bluish Green
+    color_te = "#0072B2"  # Blue
+    color_non_te = "#D55E00"  # Vermillion
+
+    # Subplot 1 (Top): SRE Values
+    ax1.bar(
+        x - width,
+        init_centers,
+        width,
+        yerr=init_errs,
+        capsize=3,
+        label=r"$\text{Initial SRE}$",
+        color=color_init,
+        edgecolor="black",
+        linewidth=0.5,
+        error_kw=ekw,
+    )
+    ax1.bar(
+        x,
+        te_centers,
+        width,
+        yerr=te_errs,
+        capsize=3,
+        label=r"$\text{Final TE SRE}$",
+        color=color_te,
+        edgecolor="black",
+        linewidth=0.5,
+        error_kw=ekw,
+    )
+    ax1.bar(
+        x + width,
+        non_te_centers,
+        width,
+        yerr=non_te_errs,
+        capsize=3,
+        label=r"$\text{Final non-TE SRE}$",
+        color=color_non_te,
+        edgecolor="black",
+        linewidth=0.5,
+        error_kw=ekw,
+    )
+    ax1.set_ylabel(r"$\text{SRE } (S_2)$", fontsize=label_fontsize)
+    ax1.grid(True, linestyle="--", linewidth=0.5, color="#e0e0e0", axis="y")
+    ax1.tick_params(direction="in", top=True, right=True, which="both", labelsize=tick_fontsize)
+    ax1.spines["top"].set_visible(True)
+    ax1.spines["right"].set_visible(True)
+
+    ax1.set_ylim(0, 5.8)
+    ax1.legend(loc="upper left", frameon=True, fontsize=tick_fontsize - 0.5)
+
+    # Subplot 2 (Bottom): Upright Proportions
+    te_props_list = []
+    non_te_props_list = []
+    for tc, nc in zip(te_counts, non_counts):
+        tot = tc + nc
+        te_props_list.append(tc / tot if tot > 0 else 0.0)
+        non_te_props_list.append(nc / tot if tot > 0 else 0.0)
+
+    w2 = 0.25
+    ax2.bar(
+        x - w2 / 2,
+        te_props_list,
+        w2,
+        label=r"$\text{TE States}$",
+        color=color_te,
+        edgecolor="black",
+        linewidth=0.5,
+        alpha=0.9,
+    )
+    ax2.bar(
+        x + w2 / 2,
+        non_te_props_list,
+        w2,
+        label=r"$\text{non-TE States}$",
+        color=color_non_te,
+        edgecolor="black",
+        linewidth=0.5,
+        alpha=0.9,
+    )
+
+    ax2.set_xticks(x)
+    ax2.set_xticklabels(x_labels, fontsize=tick_fontsize)
+    ax2.tick_params(direction="in", top=True, right=True, which="both", labelsize=tick_fontsize)
+    ax2.spines["top"].set_visible(True)
+    ax2.spines["right"].set_visible(True)
+    ax2.set_xlabel(r"$\text{Qubits } (n) \text{ and Initial State}$", fontsize=label_fontsize)
+    ax2.set_ylabel(r"$\text{Proportion of States}$", fontsize=label_fontsize)
+    ax2.set_ylim(0, 1.08)
+    ax2.set_yticks([0.0, 0.25, 0.50, 0.75, 1.00])
+    ax2.set_yticklabels([r"$0\%$", r"$25\%$", r"$50\%$", r"$75\%$", r"$100\%$"], fontsize=tick_fontsize)
+    ax2.grid(True, linestyle="--", linewidth=0.5, color="#e0e0e0", axis="y")
+
+    fig.subplots_adjust(hspace=0)
+    out_dir = os.path.dirname(output_path)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
     fig.savefig(output_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
     print(f"Saved: {output_path}")
@@ -497,9 +730,35 @@ def plot_te_vs_non_te_sre_config(loaded_data, output_path="Hist.png"):
 def main():
     import sys
 
-    target_dir = sys.argv[1] if len(sys.argv) > 1 else "zip7"
-    if not os.path.exists(OUTPUT_DIR):
-        os.makedirs(OUTPUT_DIR)
+    target_dir = sys.argv[1] if len(sys.argv) > 1 else "Initial_Magic_data"
+    output_dir = sys.argv[2] if len(sys.argv) > 2 else None
+
+    is_initial_magic = (
+        os.path.basename(os.path.normpath(target_dir)) == "Initial_Magic_data"
+        or "initial" in target_dir.lower()
+    )
+
+    if is_initial_magic:
+        out_dir = output_dir if output_dir else "Initial_Magic_plots"
+        os.makedirs(out_dir, exist_ok=True)
+        print(f"Loading Initial Magic dataset files from {target_dir}...")
+        loaded_data = load_initial_magic_data(target_dir)
+        if not loaded_data:
+            print(f"No .pkl files found in {target_dir}/!")
+            return
+
+        print(f"Found {len(loaded_data)} files in {target_dir}/:")
+        for _, info, f in loaded_data:
+            print(f"  - {info['filename']} (n={info['qbt']}, q={info['gap']})")
+
+        out_file = os.path.join(out_dir, f"{os.path.basename(os.path.normpath(target_dir))}_Hist.png")
+        print(f"\n--- Generating Side-by-Side Bar Plot ({out_file}) ---")
+        plot_initial_magic_hist(loaded_data, output_path=out_file)
+        return
+
+    out_dir = output_dir if output_dir else OUTPUT_DIR
+    if not os.path.exists(out_dir):
+        os.makedirs(out_dir)
 
     print(f"Loading dataset files from {target_dir}...")
     run_groups = load_dataset_runs(target_dir)
@@ -512,9 +771,9 @@ def main():
     for prefix, loaded_data in run_groups.items():
         print(f"\nProcessing Run: {prefix} ({len(loaded_data)} files)")
 
-        fn1 = os.path.join(OUTPUT_DIR, f"{prefix}_TE.png")
-        fn2 = os.path.join(OUTPUT_DIR, f"{prefix}_NTE.png")
-        fn3 = os.path.join(OUTPUT_DIR, f"{prefix}_Hist.png")
+        fn1 = os.path.join(out_dir, f"{prefix}_TE.png")
+        fn2 = os.path.join(out_dir, f"{prefix}_NTE.png")
+        fn3 = os.path.join(out_dir, f"{prefix}_Hist.png")
 
         print(f"--- Generating Config 1: Linechart ({fn1}) ---")
         plot_linechart_config(loaded_data, filter_mode="TE States", output_path=fn1)

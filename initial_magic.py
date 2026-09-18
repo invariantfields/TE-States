@@ -1,13 +1,28 @@
 #!/usr/bin/env python3
 import os
+os.environ.setdefault("MPLCONFIGDIR", "/tmp")
 import re
 import sys
 import glob
 import pickle
+import shutil
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.patheffects as pe
 from itertools import combinations
+
+if shutil.which("latex"):
+    plt.rcParams.update({
+        "text.usetex": True,
+        "font.family": "serif",
+        "font.serif": ["Computer Modern Roman"],
+        "text.latex.preamble": r"\usepackage{amsmath}",
+    })
+else:
+    plt.rcParams.update({
+        "font.family": "serif",
+        "font.serif": ["DejaVu Serif", "Computer Modern Roman"],
+        "mathtext.fontset": "cm",
+    })
 
 
 # -------------------------------------------------------------------
@@ -92,10 +107,14 @@ def load_initial_magic_data(data_dir="Initial_Magic_data"):
 
 
 def plot_initial_magic_hist(loaded_data, output_path="Initial_Magic_plots/Initial_Magic_data_Hist.png"):
+    fig_w, fig_h = 5.2, 4.8
+    label_fontsize = 12
+    tick_fontsize = 10.5
+
     fig, (ax1, ax2) = plt.subplots(
         2,
         1,
-        figsize=(11.0, 5.8),
+        figsize=(fig_w, fig_h),
         sharex=True,
         facecolor="white",
         gridspec_kw={"hspace": 0},
@@ -140,7 +159,7 @@ def plot_initial_magic_hist(loaded_data, output_path="Initial_Magic_plots/Initia
         non_counts.append(len(non_te_vals))
 
     x = np.arange(len(x_labels))
-    width = 0.22
+    width = 0.25
     ekw = dict(elinewidth=0.8, capthick=0.8)
 
     # Colorblind-friendly palette
@@ -185,103 +204,27 @@ def plot_initial_magic_hist(loaded_data, output_path="Initial_Magic_plots/Initia
         linewidth=0.5,
         error_kw=ekw,
     )
-    ax1.set_ylabel(r"$\text{SRE } (S_2)$", fontsize=11.5)
+    ax1.set_ylabel(r"$\text{SRE } (S_2)$", fontsize=label_fontsize)
     ax1.grid(True, linestyle="--", linewidth=0.5, color="#e0e0e0", axis="y")
-    ax1.tick_params(axis="both", labelsize=9.5)
-
-    def fmt_val(m, e, c):
-        if c == 0:
-            return "N=0"
-        m_clean = 0.0 if abs(m) < 1e-5 else m
-        e_clean = 0.0 if abs(e) < 1e-5 else e
-        return f"{m_clean:.2f}±{e_clean:.2f}\nN={c}"
-
-    max_y1 = 0
-    stroke = [pe.withStroke(linewidth=2.0, foreground="white")]
-
-    for i in range(len(x)):
-        m1, e1, c1 = init_centers[i], init_errs[i], init_counts[i]
-        y1_top = m1 + e1
-
-        m2, e2, c2 = te_centers[i], te_errs[i], te_counts[i]
-        y2_top = m2 + e2
-
-        m3, e3, c3 = non_te_centers[i], non_te_errs[i], non_counts[i]
-        y3_top = m3 + e3
-
-        offset1 = 0.08
-        if abs(y2_top - y1_top) < 1.2 or abs(y2_top - y3_top) < 1.2:
-            offset2 = 0.70
-        else:
-            offset2 = 0.08
-        offset3 = 0.08
-
-        pos_y1 = y1_top + offset1
-        pos_y2 = y2_top + offset2
-        pos_y3 = y3_top + offset3
-
-        max_y1 = max(max_y1, pos_y1, pos_y2, pos_y3)
-
-        pos_x1 = x[i] - width
-        pos_x3 = x[i] + width
-        if y2_top > y1_top + 0.8:
-            pos_x1 -= 0.015
-        if y2_top > y3_top + 0.8:
-            pos_x3 += 0.015
-
-        ax1.text(
-            pos_x1,
-            pos_y1,
-            fmt_val(m1, e1, c1),
-            ha="center",
-            va="bottom",
-            fontsize=7.5,
-            color="#222222",
-            path_effects=stroke,
-        )
-
-        # Shift label over SRE for TE-states right by 1pt
-        ax1.annotate(
-            fmt_val(m2, e2, c2),
-            xy=(x[i], pos_y2),
-            xytext=(1, 0),
-            textcoords="offset points",
-            ha="center",
-            va="bottom",
-            fontsize=7.5,
-            color="#222222",
-            path_effects=stroke,
-        )
-
-        ax1.text(
-            pos_x3,
-            pos_y3,
-            fmt_val(m3, e3, c3),
-            ha="center",
-            va="bottom",
-            fontsize=7.5,
-            color="#222222",
-            path_effects=stroke,
-        )
-
-    ax1.set_ylim(0, max(max_y1 * 1.22, 1.0))
+    ax1.tick_params(direction="in", top=True, right=True, which="both", labelsize=tick_fontsize)
+    ax1.spines["top"].set_visible(True)
+    ax1.spines["right"].set_visible(True)
+    ax1.set_ylim(0, 5.8)
+    ax1.legend(loc="upper left", frameon=True, fontsize=tick_fontsize - 0.5)
 
     # Subplot 2 (Bottom): Upright Proportions
     te_props_list = []
     non_te_props_list = []
     for tc, nc in zip(te_counts, non_counts):
         tot = tc + nc
-        if tot > 0:
-            te_props_list.append(tc / tot)
-            non_te_props_list.append(nc / tot)
-        else:
-            te_props_list.append(0.0)
-            non_te_props_list.append(0.0)
+        te_props_list.append(tc / tot if tot > 0 else 0.0)
+        non_te_props_list.append(nc / tot if tot > 0 else 0.0)
 
+    w2 = 0.25
     ax2.bar(
-        x - width / 2,
+        x - w2 / 2,
         te_props_list,
-        width,
+        w2,
         label=r"$\text{TE States}$",
         color=color_te,
         edgecolor="black",
@@ -289,9 +232,9 @@ def plot_initial_magic_hist(loaded_data, output_path="Initial_Magic_plots/Initia
         alpha=0.9,
     )
     ax2.bar(
-        x + width / 2,
+        x + w2 / 2,
         non_te_props_list,
-        width,
+        w2,
         label=r"$\text{non-TE States}$",
         color=color_non_te,
         edgecolor="black",
@@ -299,46 +242,17 @@ def plot_initial_magic_hist(loaded_data, output_path="Initial_Magic_plots/Initia
         alpha=0.9,
     )
 
-    # Annotate ax2 bars with percentage and sample count N
-    for i in range(len(x)):
-        p_te = te_props_list[i]
-        c_te = te_counts[i]
-        txt_te = f"{p_te*100:.1f}%\nN={c_te}"
-        ax2.text(
-            x[i] - width / 2,
-            p_te + 0.02,
-            txt_te,
-            ha="center",
-            va="bottom",
-            fontsize=7.8,
-            color="#333333",
-        )
-
-        p_nte = non_te_props_list[i]
-        c_nte = non_counts[i]
-        txt_nte = f"{p_nte*100:.1f}%\nN={c_nte}"
-        ax2.text(
-            x[i] + width / 2,
-            p_nte + 0.02,
-            txt_nte,
-            ha="center",
-            va="bottom",
-            fontsize=7.8,
-            color="#333333",
-        )
-
     ax2.set_xticks(x)
-    ax2.set_xticklabels(x_labels, fontsize=10.5)
-    ax2.tick_params(axis="both", labelsize=9.5)
-    ax2.set_xlabel(r"$\text{Qubits } (n) \text{ and Initial State}$", fontsize=11.5)
-    ax2.set_ylabel(r"$\text{Proportion of States}$", fontsize=11.5)
-    ax2.set_ylim(0, 1.38)
+    ax2.set_xticklabels(x_labels, fontsize=tick_fontsize)
+    ax2.tick_params(direction="in", top=True, right=True, which="both", labelsize=tick_fontsize)
+    ax2.spines["top"].set_visible(True)
+    ax2.spines["right"].set_visible(True)
+    ax2.set_xlabel(r"$\text{Qubits } (n) \text{ and Initial State}$", fontsize=label_fontsize)
+    ax2.set_ylabel(r"$\text{Proportion of States}$", fontsize=label_fontsize)
+    ax2.set_ylim(0, 1.08)
     ax2.set_yticks([0.0, 0.25, 0.50, 0.75, 1.00])
-    ax2.set_yticklabels(["0%", "25%", "50%", "75%", "100%"], fontsize=9.5)
+    ax2.set_yticklabels([r"$0\%$", r"$25\%$", r"$50\%$", r"$75\%$", r"$100\%$"], fontsize=tick_fontsize)
     ax2.grid(True, linestyle="--", linewidth=0.5, color="#e0e0e0", axis="y")
-
-    handles, labels = ax1.get_legend_handles_labels()
-    ax2.legend(handles, labels, ncols=3, frameon=True, fontsize=9.5, loc="upper right")
 
     fig.subplots_adjust(hspace=0)
     out_dir = os.path.dirname(output_path)

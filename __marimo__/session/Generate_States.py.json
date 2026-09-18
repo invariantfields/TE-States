@@ -1,0 +1,133 @@
+{
+  "version": "1",
+  "metadata": {
+    "marimo_version": "0.23.16",
+    "script_metadata_hash": "e86f77388d9307cd67cbdbaf21142d3d"
+  },
+  "cells": [
+    {
+      "id": "Hbol",
+      "code_hash": "bd1470ae3262b13445ac6dcb402d1e68",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": [
+        {
+          "type": "stream",
+          "name": "stdout",
+          "text": "\u2705 GPU detected! CUDA runtime: 12.9\n",
+          "mimetype": "text/plain"
+        }
+      ]
+    },
+    {
+      "id": "MJUe",
+      "code_hash": "7eff9c8b615d1bb6d93af4db74ce1b70",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h1 id=\"n-qubit-state-optimisation-sre-trajectory-generator\">\ud83e\uddea N-Qubit State Optimisation &amp; SRE Trajectory Generator</h1>\n<span class=\"paragraph\">This notebook generates <em>stabilizer R\u00e9nyi entropy</em> (SRE) trajectories for\n<marimo-tex class=\"arithmatex\">||(N||)</marimo-tex>-qubit quantum states.  Starting from random <strong>stabilizer-gap</strong> initial\nstates it minimises the total <strong>Hilbert-Schmidt violation</strong> of the\nHildebrand separability criterion using JAX L-BFGS, while recording the\nexact SRE at every checkpoint via a Fast Walsh-Hadamard Transform (FWHT) kernel.</span>\n<blockquote>\n<span class=\"paragraph\"><strong>Current Runtime Execution Mode:</strong> \ud83d\ude80 GPU-accelerated (CuPy + JAX CUDA)</span>\n</blockquote>\n<h3 id=\"workflow-at-a-glance\">Workflow at a glance</h3>\n<ol>\n<li><strong>Generate</strong> random almost-stabilizer initial states (symplectic circuit + Haar projection).</li>\n<li><strong>Optimise</strong> each state batch with vmapped L-BFGS.</li>\n<li><strong>Measure</strong> SRE at every <code>chunk_size</code> optimisation steps.</li>\n<li><strong>Save</strong> full trajectories (purity, violation, SRE, final states) to disk.</li>\n</ol></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "vblA",
+      "code_hash": "9d4828897bc764b10d20e2a963671b39",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<div style='display: flex;flex: 1;flex-direction: row;justify-content: flex-start;align-items: center;flex-wrap: nowrap;gap: 3rem'><div style='display: flex;flex: 1;flex-direction: column;justify-content: flex-start;align-items: normal;flex-wrap: nowrap;gap: 0.5rem'><marimo-ui-element object-id='vblA-0' random-id='a7c7a2e6-45b2-55f2-2efc-8906a7c9e6a7'><marimo-slider data-initial-value='7' data-label='&quot;&#92;u003cspan class=&#92;&quot;markdown prose dark:prose-invert contents&#92;&quot;&#92;u003e&#92;u003cspan class=&#92;&quot;paragraph&#92;&quot;&#92;u003eQubits (N)&#92;u003c/span&#92;u003e&#92;u003c/span&#92;u003e&quot;' data-start='2' data-stop='12' data-step='1' data-steps='[]' data-debounce='false' data-disabled='false' data-orientation='&quot;horizontal&quot;' data-show-value='false' data-include-input='false' data-full-width='false'></marimo-slider></marimo-ui-element><marimo-ui-element object-id='vblA-1' random-id='2409b141-d40b-191e-a30f-62b205c9b985'><marimo-number data-initial-value='4000' data-label='&quot;&#92;u003cspan class=&#92;&quot;markdown prose dark:prose-invert contents&#92;&quot;&#92;u003e&#92;u003cspan class=&#92;&quot;paragraph&#92;&quot;&#92;u003eNum Seeds (Samples)&#92;u003c/span&#92;u003e&#92;u003c/span&#92;u003e&quot;' data-start='1' data-stop='50000' data-step='1' data-debounce='false' data-full-width='false' data-disabled='false'></marimo-number></marimo-ui-element></div><div style='display: flex;flex: 1;flex-direction: column;justify-content: flex-start;align-items: normal;flex-wrap: nowrap;gap: 0.5rem'><marimo-ui-element object-id='vblA-2' random-id='a6bdbb76-a5b0-dec8-3d86-bde97151946b'><marimo-number data-initial-value='50' data-label='&quot;&#92;u003cspan class=&#92;&quot;markdown prose dark:prose-invert contents&#92;&quot;&#92;u003e&#92;u003cspan class=&#92;&quot;paragraph&#92;&quot;&#92;u003eOptimisation Steps&#92;u003c/span&#92;u003e&#92;u003c/span&#92;u003e&quot;' data-start='1' data-stop='10000' data-step='1' data-debounce='false' data-full-width='false' data-disabled='false'></marimo-number></marimo-ui-element><marimo-ui-element object-id='vblA-3' random-id='552dbfe3-b14e-9ded-8d91-312093c3425e'><marimo-number data-initial-value='1' data-label='&quot;&#92;u003cspan class=&#92;&quot;markdown prose dark:prose-invert contents&#92;&quot;&#92;u003e&#92;u003cspan class=&#92;&quot;paragraph&#92;&quot;&#92;u003eChunk Size (step_mes)&#92;u003c/span&#92;u003e&#92;u003c/span&#92;u003e&quot;' data-start='1' data-stop='500' data-step='1' data-debounce='false' data-full-width='false' data-disabled='false'></marimo-number></marimo-ui-element></div><div style='display: flex;flex: 1;flex-direction: column;justify-content: flex-start;align-items: normal;flex-wrap: nowrap;gap: 0.5rem'><marimo-ui-element object-id='vblA-4' random-id='4d0e3eed-12af-4dcc-5f11-8bf3febba8d8'><marimo-text data-initial-value='&quot;zip1&quot;' data-label='&quot;&#92;u003cspan class=&#92;&quot;markdown prose dark:prose-invert contents&#92;&quot;&#92;u003e&#92;u003cspan class=&#92;&quot;paragraph&#92;&quot;&#92;u003eOutput Directory&#92;u003c/span&#92;u003e&#92;u003c/span&#92;u003e&quot;' data-placeholder='&quot;&quot;' data-kind='&quot;text&quot;' data-full-width='false' data-disabled='false' data-debounce='true'></marimo-text></marimo-ui-element><marimo-ui-element object-id='vblA-5' random-id='f77b929f-92b0-8ae5-618a-8d97fc74bbb2'><marimo-button data-initial-value='0' data-label='&quot;&#92;u003cspan class=&#92;&quot;markdown prose dark:prose-invert contents&#92;&quot;&#92;u003e&#92;u003cspan class=&#92;&quot;paragraph&#92;&quot;&#92;u003e\ud83d\ude80 Run Data Generation&#92;u003c/span&#92;u003e&#92;u003c/span&#92;u003e&quot;' data-kind='&quot;neutral&quot;' data-disabled='false' data-full-width='false'></marimo-button></marimo-ui-element></div></div>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "bkHC",
+      "code_hash": "a24d7b1412555d7e600c6c995fea7af0",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "lEQa",
+      "code_hash": "53be32b081afad0f15bdca55eb9917f8",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "PKri",
+      "code_hash": "0d4cfbcbd000513c989accb0e3a29cb4",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Xref",
+      "code_hash": "eb234ed08db730256113ea478ca3edb0",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "SFPL",
+      "code_hash": "fbab5cf42264679d6e9b691f48bfc457",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "BYtC",
+      "code_hash": "6d4a0b1bb3ea126da013f2e12482b7ed",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\">\ud83d\udc46 Adjust the parameters above and click <strong>Run Data Generation</strong> to start.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    }
+  ]
+}
