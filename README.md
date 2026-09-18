@@ -178,8 +178,19 @@ The `LP_bound/` directory contains SageMath scripts and Jupyter notebooks for co
 
 ## Attribution Notes
 
-- **Linear Programming Bounds (`LP_bound/`)**: Developed by **Gerard Anglès Munné** (exact rational LP formulations, dual certificates, and APPT verification over $\mathbb{Q}$ using SageMath).
-- **Quantum State Optimization, SRE Trajectories & Framework**: Developed by **Naga Bhavya Teja Kothakonda** ([@invariantfields](https://github.com/invariantfields)) (symplectic state generation, JAX L-BFGS optimization over the Hildebrand separability criterion, Fast Walsh-Hadamard Transform $S_2$ magic entropy computation, interactive marimo interface, and plotting suites).
+### Contributors
+- **Linear Programming Bounds (`LP_bound/`)**: Developed by [**Gerard Anglès Munné**](https://scholar.google.com/citations?user=kEi4_G4AAAAJ) (exact rational LP formulations, dual certificates, and APPT verification over $\mathbb{Q}$ using SageMath).
+- **Quantum State Optimization, SRE Trajectories & Framework**: Developed by [**Naga Bhavya Teja Kothakonda**](https://scholar.google.com/citations?user=fuzvthUAAAAJ) ([@invariantfields](https://github.com/invariantfields)) (symplectic state generation, JAX L-BFGS optimization over the Hildebrand separability criterion, Fast Walsh-Hadamard Transform $S_2$ magic entropy computation, interactive marimo interface, and plotting suites).
+
+### Third-Party Software & Algorithmic References
+
+This repository adapts, implements, and builds upon the following open-source packages and foundational works:
+
+- **Random Clifford / Stabilizer Generation**: The symplectic generator construction for random stabilizer states was derived from [`randstab`](https://github.com/qotlabs/randstab), implementing the Aaronson-Gottesman stabilizer tableau update rules ([*Phys. Rev. A* 70, 052328](https://doi.org/10.1103/PhysRevA.70.052328)).
+- **Fast Hadamard Transform for Magic / SRE**: The vectorized Fast Walsh-Hadamard Transform (FWHT) implementation for computing Stabilizer Rényi Entropy ($S_2$) was adapted from the Julia package [`HadaMAG.jl`](https://github.com/bsc-quantic/HadaMAG.jl), developed by the Quantic group at the Barcelona Supercomputing Center (BSC-CNS) ([arXiv:2601.07824](https://arxiv.org/abs/2601.07824)).
+- **Absolute Separability & APPT Criteria**: The separability evaluation combines the Gurvits-Barnum maximal purity ball bound ([*Phys. Rev. A* 66, 062311](https://doi.org/10.1103/PhysRevA.66.062311)) and the two-qubit spectral separability condition by R. Hildebrand ([*Phys. Rev. A* 76, 052325](https://doi.org/10.1103/PhysRevA.76.052325)).
+- **Exact Rational LP Solver (`LP_bound/`)**: Primal and dual linear programs are solved over $\mathbb{Q}$ using [SageMath](https://www.sagemath.org/) coupled with the [Parma Polyhedra Library (PPL)](https://www.bugseng.com/ppl).
+- **Optimization & Hardware Acceleration**: Numerical trajectory optimization is powered by [JAX](https://github.com/google/jax) and [JAXopt](https://github.com/google/jaxopt) (vmapped L-BFGS), with GPU acceleration via [CuPy](https://cupy.dev/) and an interactive interface built using [marimo](https://marimo.io/).
 
 ### Citation
 
@@ -196,5 +207,6 @@ If you use this work, methods, or datasets, please cite our paper ([arXiv:2604.1
       url={https://arxiv.org/abs/2604.13169}, 
 }
 ```
+
 
 
