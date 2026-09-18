@@ -173,3 +173,28 @@ The `LP_bound/` directory contains SageMath scripts and Jupyter notebooks for co
 - **`fun.sage`**: Core SageMath module that builds the standard form LP constraint matrices ($A, b, c$) using Krawtchouk polynomials.
 - **`LPrational.ipynb`**: Solves the exact primal and dual Mixed Integer Linear Programs (MILP) over the rationals ($\mathbb{Q}$), checks for strong duality ($c x^T = y b$), and saves the exact solutions to a SageMath object file (`.sobj`).
 - **`LPrational_TE.ipynb` & `CheckLPsolutions.ipynb`**: Load the generated `.sobj` exact solutions and formally verify that they satisfy the APPT condition across all specified qubit sizes $N$, proving compatibility with the existence of $(\lfloor N/2 \rfloor - 1)$-TE states.
+
+---
+
+## Attribution Notes
+
+- **Linear Programming Bounds (`LP_bound/`)**: Developed by **Gerard Anglès Munné** (exact rational LP formulations, dual certificates, and APPT verification over $\mathbb{Q}$ using SageMath).
+- **Quantum State Optimization, SRE Trajectories & Framework**: Developed by **Naga Bhavya Teja Kothakonda** ([@invariantfields](https://github.com/invariantfields)) (symplectic state generation, JAX L-BFGS optimization over the Hildebrand separability criterion, Fast Walsh-Hadamard Transform $S_2$ magic entropy computation, interactive marimo interface, and plotting suites).
+
+### Citation
+
+If you use this work, methods, or datasets, please cite our paper ([arXiv:2604.13169](https://arxiv.org/abs/2604.13169)):
+
+```bibtex
+@misc{rico2026thresholdentanglementsharingquantum,
+      title={Threshold entanglement sharing: quantum states with absolutely separable marginals}, 
+      author={Albert Rico and Jofre Abellanet-Vidal and Naga Bhavya Teja Kothakonda and Anna Sanpera and Gerard Anglès Munné},
+      year={2026},
+      eprint={2604.13169},
+      archivePrefix={arXiv},
+      primaryClass={quant-ph},
+      url={https://arxiv.org/abs/2604.13169}, 
+}
+```
+
+
