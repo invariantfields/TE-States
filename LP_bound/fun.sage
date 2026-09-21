@@ -13,7 +13,8 @@ def K2(m, k, n): # Krawtchouk polynomials
         
     return ref
 
-def Standard_form(n,k): # constraints in the standard form A*a' >= b where a' are the variables. c*a' is the objective function. 
+def Standard_form(n,k, kuni=False): # constraints in the standard form A*a' >= b where a' are the variables. c*a' is the objective function.
+                                    # kuni: True if checking the feasibility of m-uniform states and False if checking the TES bounds
     
     A = matrix(QQ, 2, n+1)
     
@@ -56,8 +57,8 @@ def Standard_form(n,k): # constraints in the standard form A*a' >= b where a' ar
     # s[i] >=0
     for j in range(0, n+1):
         z = vector(QQ, [
-            K2(n-j, k, n)
-            for k in range(0, n+1)
+            K2(n-j, r, n)
+            for r in range(0, n+1)
         ])
     
         A = A.stack(z)
@@ -73,15 +74,35 @@ def Standard_form(n,k): # constraints in the standard form A*a' >= b where a' ar
     
     for j in odd:
         z = vector(QQ, [
-            -K2(n-j, k, n)
-            for k in range(0, n+1)
+            -K2(n-j, r, n)
+            for r in range(0, n+1)
         ])
     
         A = A.stack(z)
         b = b.stack(matrix(QQ, [[0]]))
 
     # objective function, i.e. c*a' = a[floor(n/2)]
+    
     c = matrix(QQ, 1, n+1)
     c[0, k] = QQ(1)
+
+    if kuni is True:
+        
+        c = matrix(QQ, 1, n+1) # c=0 -> feasibility problem
+
+        for i in range(1, k+1): #a'[i]=2^-i comb(n,i) if 1=<i=<k
+
+            z = matrix(QQ, 1, n+1)
+            z[0, i] = QQ(1)
+        
+            A = A.stack(z)
+            b = b.stack(matrix(QQ, [[2^-i*comb(n,i)]]))
+
+            z = matrix(QQ, 1, n+1)
+            z[0, i] = QQ(-1)
+        
+            A = A.stack(z)
+            b = b.stack(matrix(QQ, [[-2^-i*comb(n,i)]]))
+
 
     return A, b, c
